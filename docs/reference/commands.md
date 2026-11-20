@@ -6,13 +6,13 @@
 | --- | --- | --- |
 | `list` | `-n NAME` or `-p PREFIX` | No |
 | `inspect SERVER` | `-n NAME` or `-p PREFIX` | No |
-| `config SERVER --client CLIENT` | `-n NAME` or `-p PREFIX` | No |
-| `link SERVER --client CLIENT` | `-n NAME` or `-p PREFIX` | Yes |
-| `unlink SERVER --client CLIENT` | No | Yes |
-| `status` | No | No |
+| `render SERVER --client CLIENT` | `-n NAME` or `-p PREFIX` | No |
+| `register SERVER --client CLIENT` | `-n NAME` or `-p PREFIX` | Yes |
+| `unregister SERVER --client CLIENT` | No | Yes |
+| `registry` | No | No |
 | `run SERVER` | `-n NAME` or `-p PREFIX` | No |
 
-`config`, `link`, `unlink`, and `status` use the current directory by default. `--global` selects a user configuration only for supported clients. Claude Code and Copilot share the project `.mcp.json` format. Claude Desktop accepts a global local-stdio registration only. Each client has its own approval and trust policy. Registration does not grant trust or permission to invoke tools.
+`render`, `register`, `unregister`, and `registry` use the current directory by default. `render` generates a native client snippet, not a portable environment export. `--global` selects a user configuration only for supported clients. Claude Code and Copilot share the project `.mcp.json` format. Claude Desktop accepts a global local-stdio registration only. Each client has its own approval and trust policy. Registration does not grant trust or permission to invoke tools.
 
 `--package PACKAGE` on `run` requires exact equality with the normalized name of the package owning the manifest. It is not a MatchSpec and does not identify the executable's dependency package. Put extra literal server arguments after `--`, for example `conda mcp run -n servers example -- --verbose`.
 
@@ -33,11 +33,13 @@ On Windows, launch metadata and arguments must fit within `cmd.exe`'s 8,191-char
 
 The project is the explicit current directory. Running from home does not substitute for `--global`. Home override variables must contain absolute paths. Claude Code and Copilot share one project config and receipt, so changing either affects both.
 
-`status --all` inspects the selected scope and reports a shared path once. Each row includes registration `state`, receipt-source `source_state`, and `effective_state: unknown`. Other client configuration layers, trust decisions, plugins, and runtime overrides can change what the client actually loads.
+Kilo layers containing comments or trailing commas cannot be safely inspected without a JSONC parser. `register` and `unregister` refuse to change entries when those layers prevent collision checks. Use `conda mcp render` to generate the native snippet instead. `registry` reads the selected strict-JSON target and its receipts, without checking competing layers or reporting Kilo's effective configuration.
+
+`registry --all` lists local client registrations in the selected scope and reports a shared path once. It does not query the official MCP Registry or check client or server health. Each row includes registration `state` and receipt-source `source_state`.
 
 ## Conflicts and recovery
 
-`link --dry-run` validates the source and destination and previews the generated entry without creating a directory, lock, or receipt. `unlink --dry-run` previews removal. Ordinary unlink only removes an unchanged receipted entry. `unlink --force` can remove an edited or unmanaged selected entry, but cannot bypass malformed files, redirected paths, or ambiguous recovery. No command deletes package files.
+`register --dry-run` validates the source and destination and previews the generated entry without creating a directory, lock, or receipt. `unregister --dry-run` previews removal. Ordinary unregister only removes an unchanged receipted entry. `unregister --force` can remove an edited or unmanaged selected entry, but cannot bypass malformed files, redirected paths, or ambiguous recovery. No command deletes package files.
 
 Receipts are adjacent files named `<config-filename>.conda-mcp.json`. Keep the receipt with its config: a matching entry without a receipt is unmanaged. Interrupted mutations retain an intent containing before/after fingerprints. The next mutation checks the actual current entry before finalizing or rolling back receipt state. It never restores a stale whole-config snapshot.
 

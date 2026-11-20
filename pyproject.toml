@@ -31,7 +31,7 @@ version-file = "src/conda_mcp/_version.py"
 packages = ["src/conda_mcp"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/scripts", "/docs", "/examples", "/recipe", "/pyproject.toml", "/conda.toml", "/conda.lock", "/LICENSE", "/README.md", "/AGENTS.md", "/CONTRIBUTING.md", "/RELEASING.md"]
+include = ["/src", "/tests", "/scripts", "/docs", "/demos", "/examples", "/recipe", "/pyproject.toml", "/conda.toml", "/conda.lock", "/LICENSE", "/README.md", "/AGENTS.md", "/CONTRIBUTING.md", "/RELEASING.md"]
 exclude = ["/docs/_build"]
 
 [tool.pytest.ini_options]

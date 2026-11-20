@@ -14,14 +14,14 @@ These commands install a locally built example, not a published server package. 
 ```sh
 conda mcp list -n servers
 conda mcp inspect fastmcp-example -n servers
-conda mcp config fastmcp-example -n servers --client codex
-conda mcp link fastmcp-example -n servers --client codex --dry-run
-conda mcp link fastmcp-example -n servers --client codex
+conda mcp render fastmcp-example -n servers --client codex
+conda mcp register fastmcp-example -n servers --client codex --dry-run
+conda mcp register fastmcp-example -n servers --client codex
 ```
 
 `-n` and `-p` select the source environment that owns the installed declaration. They do not select where client configuration is written. Client configuration is written in the current project by default. Use `--global` only when the client supports a user-level configuration.
 
-Review the package and declaration before linking it. Package ownership records where a declaration came from. It does not make its server trustworthy. A local server runs with your privileges after activation. Client approval and tool permissions remain client policy.
+Review the package and declaration before registering it. Package ownership records where a declaration came from. It does not make its server trustworthy. A local server runs with your privileges after activation. Client approval and tool permissions remain client policy.
 
 Run a local stdio server in the foreground:
 
@@ -34,6 +34,6 @@ The command forwards protocol bytes between the client and server. An MCP client
 Inspect and remove the registration independently of the package:
 
 ```sh
-conda mcp status --client codex
-conda mcp unlink fastmcp-example --client codex
+conda mcp registry --client codex
+conda mcp unregister fastmcp-example --client codex
 ```

@@ -4,6 +4,13 @@
 
 The project is unreleased. Install it into the environment that runs `conda`, using conda or conda-pypi. Server packages may be installed in another environment.
 
+```{image} ../demos/use-a-server.gif
+:alt: Terminal recording of discovering a packaged FastMCP server and creating and removing its project-local Codex registration.
+:target: demos/
+```
+
+See {doc}`demos` for the commands and a separate inspection recording.
+
 ::::{grid} 1 1 2 2
 :gutter: 3
 
@@ -40,6 +47,7 @@ Understand trust, streams, receipts, and package changes.
 :hidden:
 
 tutorials/first-server
+demos
 how-to/package-a-server
 reference/commands
 reference/server-format

@@ -1,0 +1,177 @@
+name: Publish conda package
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Validated release version from release.yml
+        required: true
+        type: string
+      source-sha256:
+        description: SHA-256 of the source distribution published to PyPI
+        required: true
+        type: string
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash -el {0}
+
+env:
+  RELEASE_TAG: ${{ inputs.version }}
+  CONDA_MCP_SOURCE_SHA256: ${{ inputs.source-sha256 }}
+
+concurrency:
+  group: publish-conda-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build from the published source distribution
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release-sha: ${{ steps.release.outputs.release-sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.version }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag
+        id: release
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$CONDA_MCP_SOURCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = tag
+          release_sha="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          test "$(git rev-parse HEAD)" = "$release_sha"
+          git merge-base --is-ancestor "$release_sha" origin/main
+          test "$GITHUB_REF" = "refs/tags/$RELEASE_TAG"
+          test "$release_sha" = "$GITHUB_SHA"
+          printf 'release-sha=%s\n' "$release_sha" >> "$GITHUB_OUTPUT"
+      - uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3
+        with:
+          miniforge-version: latest
+          activate-environment: ''
+          auto-activate: true
+      - run: conda install -n base --yes --override-channels -c conda-forge 'conda>=26.10' 'conda-workspaces>=0.12'
+      - run: conda workspace install --locked -e build
+      - name: Validate release metadata
+        run: test "$(conda workspace run -e build -- python -m hatchling version)" = "$RELEASE_TAG"
+      - name: Verify the published source distribution
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 120 --connect-timeout 10 --max-time 60 "https://files.pythonhosted.org/packages/source/c/conda_mcp/conda_mcp-${RELEASE_TAG}.tar.gz" -o "$RUNNER_TEMP/release-source.tar.gz"
+          printf '%s  %s\n' "$CONDA_MCP_SOURCE_SHA256" "$RUNNER_TEMP/release-source.tar.gz" | sha256sum -c -
+      - run: conda task run -e build build-conda
+      - name: Check package artifact
+        run: |
+          shopt -s nullglob
+          packages=(conda-dist/noarch/*.conda)
+          test "${#packages[@]}" -eq 1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conda-package
+          path: conda-dist/noarch/*.conda
+          if-no-files-found: error
+
+  attest:
+    name: Attest conda package
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: conda-package
+          path: conda-dist/noarch/
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: conda-dist/noarch/*.conda
+      - name: Create CEP 27 publication attestation
+        id: publication
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: conda-dist/noarch/*.conda
+          predicate-type: https://schemas.conda.org/attestations-publish-1.schema.json
+          predicate: '{"targetChannel":"https://conda.anaconda.org/jezdez"}'
+      - name: Verify publication evidence before upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.publication.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(conda-dist/noarch/*.conda)
+          test "${#packages[@]}" -eq 1
+          gh attestation verify "${packages[0]}" --repo "$GITHUB_REPOSITORY" --bundle "$BUNDLE" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish-conda.yml" --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --cert-oidc-issuer https://token.actions.githubusercontent.com --deny-self-hosted-runners --predicate-type https://schemas.conda.org/attestations-publish-1.schema.json --format json > "$RUNNER_TEMP/verified-publication.json"
+          jq -se 'length == 1 and (.[0] | type == "array" and length == 1 and all(.[]; .verificationResult.statement.predicateType == "https://schemas.conda.org/attestations-publish-1.schema.json" and .verificationResult.statement.predicate.targetChannel == "https://conda.anaconda.org/jezdez"))' "$RUNNER_TEMP/verified-publication.json" >/dev/null
+          cp "$BUNDLE" "${packages[0]}.sigstore.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conda-publication-attestation
+          path: conda-dist/noarch/*.conda.sigstore.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish to jezdez/main
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: anaconda
+      url: https://anaconda.org/jezdez/conda-mcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.release-sha }}
+          persist-credentials: false
+      - uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3
+        with:
+          miniforge-version: latest
+          activate-environment: ''
+          auto-activate: true
+      - run: conda install -n base --yes --override-channels -c conda-forge 'conda>=26.10' 'conda-workspaces>=0.12'
+      - run: conda workspace install --locked -e build
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: conda-package
+          path: conda-dist/noarch/
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: conda-publication-attestation
+          path: conda-dist/noarch/
+      - name: Verify unchanged tag, publication evidence, and absent channel release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.build.outputs.release-sha }}
+        run: |
+          set -euo pipefail
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq 'select(.object.type == "tag") | .object.sha')"
+          test -n "$tag_sha"
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" | jq -e --arg sha "$RELEASE_SHA" '.object.type == "commit" and .object.sha == $sha' >/dev/null
+          shopt -s nullglob
+          packages=(conda-dist/noarch/*.conda)
+          bundles=(conda-dist/noarch/*.conda.sigstore.json)
+          test "${#packages[@]}" -eq 1
+          test "${#bundles[@]}" -eq 1
+          gh attestation verify "${packages[0]}" --repo "$GITHUB_REPOSITORY" --bundle "${bundles[0]}" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish-conda.yml" --signer-digest "$GITHUB_SHA" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --cert-oidc-issuer https://token.actions.githubusercontent.com --deny-self-hosted-runners --predicate-type https://schemas.conda.org/attestations-publish-1.schema.json
+          test "$(curl -sS --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' "https://api.anaconda.org/release/jezdez/conda-mcp/${RELEASE_TAG}")" = 404
+          printf 'PACKAGE=%s\n' "${packages[0]}" >> "$GITHUB_ENV"
+      - name: Upload immutable package
+        env:
+          ANACONDA_API_KEY: ${{ secrets.ANACONDA_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$ANACONDA_API_KEY"
+          unset ANACONDA_FORCE ANACONDA_SERVER_URL
+          conda workspace run -e build -- rattler-build upload --no-config anaconda --owner jezdez --channel main "$PACKAGE"

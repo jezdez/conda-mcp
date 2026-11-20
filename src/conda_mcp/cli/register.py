@@ -16,7 +16,7 @@ from .output import message, structured
 def execute(args) -> int:
     """Preview or apply an entry with its package provenance."""
     target = config_target(args.client, Path.cwd(), global_scope=args.global_scope)
-    server = select(args).revalidate()
+    server = select(args)
     if server.stdio:
         server.resolve_executable()
     document = server.to_dict()

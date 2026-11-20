@@ -210,7 +210,7 @@ def _install(prefix: Path, artifact: Path, environment: dict[str, str]) -> None:
 
 
 def main() -> None:
-    """Verify installed discovery, export, and real manager protocol replies."""
+    """Verify installed discovery, rendering, and real manager protocol replies."""
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         home = root / "home"
@@ -323,10 +323,10 @@ def main() -> None:
                     item["name"] == server and item["package"] == package
                     for item in json.loads(listing.stdout)
                 )
-                config = _run(
+                rendered = _run(
                     [
                         "mcp",
-                        "config",
+                        "render",
                         "-p",
                         str(prefix),
                         server,
@@ -337,11 +337,11 @@ def main() -> None:
                     environment=environment,
                     cwd=prefix,
                 )
-                assert "conda" in json.loads(config.stdout)["snippet"]
-                link = _run(
+                assert "conda" in json.loads(rendered.stdout)["snippet"]
+                register = _run(
                     [
                         "mcp",
-                        "link",
+                        "register",
                         "-p",
                         str(prefix),
                         server,
@@ -352,13 +352,13 @@ def main() -> None:
                     environment=environment,
                     cwd=prefix,
                 )
-                assert json.loads(link.stdout)["changed"] is True
-                status = _run(
-                    ["mcp", "status", "--client", "codex", "--json"],
+                assert json.loads(register.stdout)["changed"] is True
+                registry = _run(
+                    ["mcp", "registry", "--client", "codex", "--json"],
                     environment=environment,
                     cwd=prefix,
                 )
-                assert json.loads(status.stdout)[0]["name"] == server
+                assert json.loads(registry.stdout)[0]["name"] == server
                 replies = _request(prefix, package, server, requests, environment)
                 assert [reply["id"] for reply in replies] == [
                     request["id"] for request in requests if "id" in request
@@ -378,7 +378,7 @@ def main() -> None:
         _run(
             [
                 "mcp",
-                "link",
+                "register",
                 "-p",
                 str(remote),
                 "example",
@@ -394,7 +394,7 @@ def main() -> None:
         result = _run(
             [
                 "mcp",
-                "config",
+                "render",
                 "-p",
                 str(wrapper),
                 "wrapper-example",
@@ -434,19 +434,19 @@ def main() -> None:
             environment=environment,
             cwd=remote,
         )
-        status = _run(
-            ["mcp", "status", "--client", "codex", "--json"],
+        registry = _run(
+            ["mcp", "registry", "--client", "codex", "--json"],
             environment=environment,
             cwd=remote,
         )
         remote_status = next(
-            item for item in json.loads(status.stdout) if item["name"] == "example"
+            item for item in json.loads(registry.stdout) if item["name"] == "example"
         )
         assert remote_status["source_state"] == "changed"
         refresh = _run(
             [
                 "mcp",
-                "link",
+                "register",
                 "example",
                 "-p",
                 str(remote),
@@ -459,7 +459,7 @@ def main() -> None:
         )
         assert json.loads(refresh.stdout)["changed"] is True
         refreshed = _run(
-            ["mcp", "status", "--client", "codex", "--json"],
+            ["mcp", "registry", "--client", "codex", "--json"],
             environment=environment,
             cwd=remote,
         )
@@ -469,28 +469,30 @@ def main() -> None:
             environment=environment,
             cwd=remote,
         )
-        status = _run(
-            ["mcp", "status", "--client", "codex", "--json"],
+        registry = _run(
+            ["mcp", "registry", "--client", "codex", "--json"],
             environment=environment,
             cwd=remote,
         )
         remote_status = next(
-            item for item in json.loads(status.stdout) if item["name"] == "example"
+            item for item in json.loads(registry.stdout) if item["name"] == "example"
         )
         assert remote_status["source_state"] == "missing"
-        unlink = _run(
-            ["mcp", "unlink", "example", "--client", "codex", "--json"],
+        unregister = _run(
+            ["mcp", "unregister", "example", "--client", "codex", "--json"],
             environment=environment,
             cwd=remote,
         )
-        assert json.loads(unlink.stdout)["removed"] is True
+        assert json.loads(unregister.stdout)["removed"] is True
         node = root / "rattler" / "example-node-mcp-server"
         _run(
             ["remove", "--yes", "-p", str(node), "example-node-mcp-server"],
             environment=environment,
             cwd=root,
         )
-    print("Installed examples passed discovery, export, and manager protocol checks.")
+    print(
+        "Installed examples passed discovery, rendering, and manager protocol checks."
+    )
 
 
 if __name__ == "__main__":

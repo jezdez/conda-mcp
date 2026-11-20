@@ -1,4 +1,4 @@
-"""Export native client configuration without writing files."""
+"""Render native client configuration without writing files."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from .output import structured
 def execute(args) -> int:
     """Render a snippet for one installed server and client."""
     target = config_target(args.client, Path.cwd(), global_scope=args.global_scope)
-    server = select(args).revalidate()
+    server = select(args)
     if server.stdio:
         server.resolve_executable()
     entry = render_entry(server, target)

@@ -18,9 +18,11 @@ def remote(install_package):
 
 
 @pytest.mark.parametrize("client", ["claude-code", "copilot", "codex", "cursor"])
-def test_link_status_and_unlink_are_complete_json(cli, tmp_path, remote, client):
+def test_register_registry_and_unregister_are_complete_json(
+    cli, tmp_path, remote, client
+):
     result = cli(
-        "link",
+        "register",
         "demo",
         "-p",
         str(remote),
@@ -33,30 +35,32 @@ def test_link_status_and_unlink_are_complete_json(cli, tmp_path, remote, client)
     linked = json.loads(result.stdout)
     assert linked["changed"] is True
     assert "never-persist-this" not in result.stdout
-    result = cli("status", "--client", client, "--json")
+    result = cli("registry", "--client", client, "--json")
     [state] = json.loads(result.stdout)
     assert state["name"] == "demo" and state["state"] == "managed"
-    assert state["source_state"] == "current" and state["effective_state"] == "unknown"
-    result = cli("unlink", "demo", "--client", client, "--json")
+    assert state["source_state"] == "current"
+    result = cli("unregister", "demo", "--client", client, "--json")
     assert result.returncode == 0, result.stdout
     assert json.loads(result.stdout)["removed"] is True
-    result = cli("unlink", "demo", "--client", client, "--json")
+    result = cli("unregister", "demo", "--client", client, "--json")
     assert json.loads(result.stdout)["removed"] is False
     assert not (tmp_path / "home" / ".claude.json").exists()
 
 
-def test_human_link_confirmation_warns_both_shared_clients(cli, remote):
-    result = cli("link", "demo", "-p", str(remote), "--client", "claude-code")
+def test_human_register_confirmation_warns_both_shared_clients(cli, remote):
+    result = cli("register", "demo", "-p", str(remote), "--client", "claude-code")
     assert result.returncode == 0, result.stderr + result.stdout
     assert "Registered demo" in result.stdout
     assert "Claude Code" in result.stdout and "Copilot" in result.stdout
     assert "{'" not in result.stdout
 
 
-def test_human_dry_run_shows_destination_and_entry_without_writes(
+def test_register_dry_run_shows_destination_and_entry_without_writes(
     cli, tmp_path, remote
 ):
-    result = cli("link", "demo", "-p", str(remote), "--client", "codex", "--dry-run")
+    result = cli(
+        "register", "demo", "-p", str(remote), "--client", "codex", "--dry-run"
+    )
     assert result.returncode == 0, result.stderr + result.stdout
     assert "Would register demo" in result.stdout
     assert "config.toml" in result.stdout
@@ -68,7 +72,7 @@ def test_force_never_bypasses_malformed_configuration(cli, tmp_path):
     config = tmp_path / "project" / ".mcp.json"
     raw = '{"mcpServers":{"demo":null}}'
     config.write_text(raw)
-    result = cli("unlink", "demo", "--client", "claude-code", "--force", "--json")
+    result = cli("unregister", "demo", "--client", "claude-code", "--force", "--json")
     assert result.returncode != 0
     document = json.loads(result.stdout)
     assert "traceback" not in document
@@ -78,31 +82,31 @@ def test_force_never_bypasses_malformed_configuration(cli, tmp_path):
 def test_unlink_after_source_removal_is_destination_only(cli, tmp_path, remote):
     assert (
         cli(
-            "link", "demo", "-p", str(remote), "--client", "cursor", "--json"
+            "register", "demo", "-p", str(remote), "--client", "cursor", "--json"
         ).returncode
         == 0
     )
     (remote / "conda-meta/provider-1-0.json").unlink()
     (remote / "share/conda-mcp/servers/demo.json").unlink()
-    [state] = json.loads(cli("status", "--client", "cursor", "--json").stdout)
+    [state] = json.loads(cli("registry", "--client", "cursor", "--json").stdout)
     assert state["source_state"] == "missing"
-    result = cli("unlink", "demo", "--client", "cursor")
+    result = cli("unregister", "demo", "--client", "cursor")
     assert result.returncode == 0, result.stderr
     assert "Removed demo" in result.stdout
-    assert "No registration" in cli("unlink", "demo", "--client", "cursor").stdout
+    assert "No registration" in cli("unregister", "demo", "--client", "cursor").stdout
 
 
-def test_human_unlink_dry_run_describes_removal_without_writing(cli, remote):
+def test_unregister_dry_run_describes_removal_without_writing(cli, remote):
     assert (
         cli(
-            "link", "demo", "-p", str(remote), "--client", "cursor", "--json"
+            "register", "demo", "-p", str(remote), "--client", "cursor", "--json"
         ).returncode
         == 0
     )
-    result = cli("unlink", "demo", "--client", "cursor", "--dry-run")
+    result = cli("unregister", "demo", "--client", "cursor", "--dry-run")
     assert result.returncode == 0, result.stderr
     assert "Would remove demo" in result.stdout
-    [state] = json.loads(cli("status", "--client", "cursor", "--json").stdout)
+    [state] = json.loads(cli("registry", "--client", "cursor", "--json").stdout)
     assert state["name"] == "demo"
 
 
@@ -110,7 +114,7 @@ def test_link_home_requires_explicit_global_even_when_cwd_is_home(
     cli, tmp_path, remote
 ):
     result = cli(
-        "link",
+        "register",
         "demo",
         "-p",
         str(remote),
@@ -123,7 +127,7 @@ def test_link_home_requires_explicit_global_even_when_cwd_is_home(
     assert "--global" in result.stdout
     assert not (tmp_path / "home" / ".mcp.json").exists()
     result = cli(
-        "link",
+        "register",
         "demo",
         "-p",
         str(remote),
@@ -139,11 +143,11 @@ def test_link_home_requires_explicit_global_even_when_cwd_is_home(
 def test_shared_receipt_reports_both_clients(cli, remote):
     assert (
         cli(
-            "link", "demo", "-p", str(remote), "--client", "claude-code", "--json"
+            "register", "demo", "-p", str(remote), "--client", "claude-code", "--json"
         ).returncode
         == 0
     )
-    states = json.loads(cli("status", "--all", "--json").stdout)
+    states = json.loads(cli("registry", "--all", "--json").stdout)
     assert len(states) == 1
     assert all(row["shared_clients"] == ["claude-code", "copilot"] for row in states)
 

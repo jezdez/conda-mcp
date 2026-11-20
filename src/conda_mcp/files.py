@@ -12,8 +12,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
-import jsonc
-
 if os.name == "nt":
     import ctypes
     import msvcrt
@@ -110,11 +108,10 @@ def read_bytes(
         os.close(parent)
 
 
-def load_json(raw: bytes, *, comments: bool = False) -> dict[str, object]:
+def load_json(raw: bytes) -> dict[str, object]:
     """Decode one strict UTF-8 JSON object without exposing input contents."""
     try:
-        loader = jsonc.loads if comments else json.loads
-        value = loader(
+        value = json.loads(
             raw.decode("utf-8"), object_pairs_hook=_object, parse_constant=_constant
         )
     except UnicodeDecodeError as exc:

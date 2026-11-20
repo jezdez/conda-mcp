@@ -8,7 +8,7 @@ description = "Discover, run, and configure MCP servers installed in conda envir
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
-dependencies = ["rich>=13", "tomlkit>=0.13", "json-with-comments>=1.3"]
+dependencies = ["rich>=13", "tomlkit>=0.13"]
 dynamic = ["version"]
 
 [project.entry-points.conda]

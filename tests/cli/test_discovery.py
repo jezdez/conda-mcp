@@ -71,7 +71,7 @@ def test_inspect_stdio_reports_full_launch_metadata_without_execution(
     assert "Runs package activation scripts" in result.stdout
 
 
-def test_config_rejects_missing_recorded_executable(cli, install_package, tmp_path):
+def test_render_rejects_missing_recorded_executable(cli, install_package, tmp_path):
     prefix = install_package(
         manifest={
             "schema_version": 1,
@@ -80,7 +80,7 @@ def test_config_rejects_missing_recorded_executable(cli, install_package, tmp_pa
             "stdio": {"command": "not-installed"},
         }
     )
-    result = cli("config", "probe", "-p", str(prefix), "--client", "codex", "--json")
+    result = cli("render", "probe", "-p", str(prefix), "--client", "codex", "--json")
     assert result.returncode != 0
     assert "traceback" not in json.loads(result.stdout)
     assert not (tmp_path / "project/.codex").exists()

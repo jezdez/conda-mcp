@@ -36,15 +36,15 @@ def configure(parser: ArgumentParser) -> None:
     run.add_argument("server")
     run.add_argument("arguments", nargs=REMAINDER)
     descriptions = {
-        "config": "Export a native client snippet without changing any files.",
-        "link": "Register a server in this directory, or globally with --global.",
-        "unlink": "Remove a registration, preserving packages and other entries.",
-        "status": "Inspect registrations without launching servers.",
+        "render": "Render a native client snippet without changing any files.",
+        "register": "Register a server in this directory, or globally with --global.",
+        "unregister": "Remove a registration, preserving packages and other entries.",
+        "registry": "List local client registrations without launching servers.",
     }
     for name, description in descriptions.items():
         command = commands.add_parser(name, help=description, description=description)
         add_parser_json(command)
-        if name != "status":
+        if name != "registry":
             command.add_argument("server")
             command.add_argument("--client", choices=_CLIENTS, required=True)
         else:
@@ -57,13 +57,13 @@ def configure(parser: ArgumentParser) -> None:
             action="store_true",
             help="Use user configuration instead of the current directory.",
         )
-        if name in {"config", "link"}:
+        if name in {"render", "register"}:
             add_parser_prefix(command)
-        if name in {"link", "unlink"}:
+        if name in {"register", "unregister"}:
             command.add_argument(
                 "--dry-run", action="store_true", help="Preview without writing files."
             )
-        if name == "unlink":
+        if name == "unregister":
             command.add_argument(
                 "--force",
                 action="store_true",

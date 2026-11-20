@@ -78,9 +78,11 @@ def check_layers(target: ConfigTarget, name: str) -> None:
         os.environ.get(key)
         for key in ("KILO_CONFIG", "KILO_CONFIG_DIR", "KILO_CONFIG_CONTENT")
     ):
-        raise ValueError("Unknown Kilo configuration override. Use config export.")
+        raise ValueError("Unknown Kilo configuration override. Use conda mcp render.")
     if not target.global_scope and os.environ.get("KILO_DISABLE_PROJECT_CONFIG"):
-        raise ValueError("Kilo project configuration is disabled. Use config export.")
+        raise ValueError(
+            "Kilo project configuration is disabled. Use conda mcp render."
+        )
     home = Path.home()
     global_dir = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "kilo"
     if not global_dir.is_absolute():
@@ -104,15 +106,15 @@ def check_layers(target: ConfigTarget, name: str) -> None:
             raw = read_bytes(path, limit=16 * 1024 * 1024, missing_ok=True)
             if raw is None:
                 continue
-            table = load_json(raw, comments=True).get("mcp", {})
+            table = load_json(raw).get("mcp", {})
             if not isinstance(table, dict):
                 raise ValueError
             defined, _ = entries(table)
         except (OSError, ValueError, RecursionError) as error:
             raise ValueError(
-                "Invalid or redirected Kilo configuration layer."
+                "Invalid or redirected Kilo configuration layer. Use conda mcp render."
             ) from error
         if name in defined:
             raise ValueError(
-                "Selected name appears in another Kilo layer. Use config export."
+                "Selected name appears in another Kilo layer. Use conda mcp render."
             )

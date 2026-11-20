@@ -7,7 +7,7 @@ import tomlkit
 
 
 @pytest.mark.parametrize("client", ["claude-code", "codex", "cursor", "copilot"])
-def test_export_remains_read_only_and_reports_native_format(
+def test_render_remains_read_only_and_reports_native_format(
     cli, tmp_path, install_package, client
 ):
     prefix = install_package(
@@ -21,7 +21,7 @@ def test_export_remains_read_only_and_reports_native_format(
             },
         }
     )
-    result = cli("config", "demo", "-p", str(prefix), "--client", client, "--json")
+    result = cli("render", "demo", "-p", str(prefix), "--client", client, "--json")
     assert result.returncode == 0, result.stdout
     document = json.loads(result.stdout)
     if client == "codex":
@@ -37,7 +37,7 @@ def test_export_remains_read_only_and_reports_native_format(
             == "https://example.org"
         )
     assert list((tmp_path / "project").iterdir()) == []
-    plain = cli("config", "demo", "-p", str(prefix), "--client", client)
+    plain = cli("render", "demo", "-p", str(prefix), "--client", client)
     assert plain.returncode == 0 and plain.stdout == document["snippet"]
 
 

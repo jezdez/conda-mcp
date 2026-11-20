@@ -92,12 +92,11 @@ def test_wheel_script_creates_an_isolated_conda_environment(
     create, install, smoke = calls
     assert create[0][:5] == [str(test_wheel.HOST), "-I", "-m", "conda", "create"]
     assert "--override-channels" in create[0]
-    assert create[0][-6:] == [
+    assert create[0][-5:] == [
         "conda>=26.10",
         "python>=3.11",
         "rich>=13",
         "tomlkit>=0.13",
-        "json-with-comments>=1.3",
         "pip",
     ]
     assert create[1]["CONDARC"].endswith("condarc")

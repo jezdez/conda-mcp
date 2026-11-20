@@ -42,7 +42,12 @@ def main() -> None:
     assert manager.load_entrypoints("conda", name="conda-mcp") == 1
     [command] = manager.get_hook_results("subcommands")
     assert command.name == "mcp"
-    command.configure_parser(argparse.ArgumentParser())
+    parser = argparse.ArgumentParser()
+    command.configure_parser(parser)
+    assert (
+        parser.parse_args(["render", "example", "--client", "codex"]).mcp_command
+        == "render"
+    )
     assert "conda_mcp.cli.main" not in sys.modules
     assert "conda_mcp.servers" not in sys.modules
     assert "conda_mcp.cli.output" not in sys.modules
@@ -63,7 +68,7 @@ def main() -> None:
             CONDARC=str(condarc),
             CONDA_NO_PLUGINS="false",
         )
-        for command in ("--help", "list", "status"):
+        for command in ("--help", "list", "registry"):
             result = subprocess.run(
                 [sys.executable, "-I", "-m", "conda", "mcp", command],
                 cwd=root,

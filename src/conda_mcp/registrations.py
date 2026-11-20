@@ -351,7 +351,6 @@ def _registration(
                     "path": str(target.path),
                     "state": state,
                     "source_state": record.source_state(key) if record else "unknown",
-                    "effective_state": "unknown",
                     "shared_clients": target.shared_clients,
                 }
             )
@@ -369,7 +368,7 @@ def _registration(
     if present and (old_record is None or old_record.digest != before) and not force:
         raise CondaError(
             "Refusing to replace an unmanaged or edited entry. "
-            "Inspect status or use --force."
+            "Inspect the client registry or use --force."
         )
     record = (
         ReceiptRecord.from_dict({**(source or {}), "digest": fingerprint(entry)})

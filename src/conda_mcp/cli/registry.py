@@ -28,14 +28,13 @@ def execute(args) -> int:
         structured(result)
     elif result:
         table(
-            ("Server", "Clients", "Registration", "Source", "Effective", "Path"),
+            ("Server", "Clients", "Registration", "Source", "Path"),
             (
                 (
                     row["name"],
                     ", ".join(row["shared_clients"]),
                     row["state"],
                     row["source_state"],
-                    row["effective_state"],
                     row["path"],
                 )
                 for row in result

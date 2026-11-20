@@ -109,7 +109,7 @@ def test_link_is_idempotent_and_receipt_contains_complete_source(
     [state] = registration(target)
     assert state["state"] == "managed"
     assert state["source_state"] == "current"
-    assert state["effective_state"] == "unknown"
+    assert "effective_state" not in state
 
 
 def test_receiptless_matching_entry_is_not_adopted(tmp_path, source, entry):
@@ -184,11 +184,13 @@ def test_kilo_unrelated_jsonc_layer_is_preserved(tmp_path, source, entry, layer)
     competing.parent.mkdir(exist_ok=True)
     raw = b'{// literal config\n"mcp":{"foreign":{"enabled":false},},}\n'
     competing.write_bytes(raw)
-    registration(
-        target, "demo", entry={"type": "remote", "url": entry["url"]}, source=source
-    )
+    with pytest.raises(CondaError, match="conda mcp render"):
+        registration(
+            target, "demo", entry={"type": "remote", "url": entry["url"]}, source=source
+        )
     assert competing.read_bytes() == raw
-    assert "demo" in json.loads(target.path.read_bytes())["mcp"]
+    assert not target.path.exists()
+    assert not receipt_path(target).exists()
 
 
 @pytest.mark.parametrize(
@@ -401,6 +403,29 @@ def test_stale_source_refuses_before_any_destination_write(tmp_path, source, ent
     with pytest.raises(CondaError, match="source"):
         registration(target, "demo", entry=entry, source=source)
     assert not target.path.parent.exists()
+
+
+def test_source_change_after_intent_preserves_client_configuration(
+    tmp_path, source, entry, monkeypatch
+):
+    target = config_target("claude-code", tmp_path, global_scope=False)
+    original = b'{"mcpServers":{"foreign":{"command":"keep"}}}\n'
+    target.path.write_bytes(original)
+    native_write = registrations.atomic_write
+
+    def change_source_after_intent(path, data, expected, **kwargs):
+        native_write(path, data, expected, **kwargs)
+        if path == receipt_path(target) and "pending" in json.loads(data):
+            manifest = tmp_path / source["manifest"]
+            document = json.loads(manifest.read_bytes())
+            document["description"] = "Replaced during registration"
+            manifest.write_text(json.dumps(document))
+
+    monkeypatch.setattr(registrations, "atomic_write", change_source_after_intent)
+    with pytest.raises(CondaError, match="source changed"):
+        registration(target, "demo", entry=entry, source=source)
+    assert target.path.read_bytes() == original
+    assert "pending" in json.loads(receipt_path(target).read_bytes())
 
 
 def test_receipt_record_owns_validation_and_is_immutable(source, entry):

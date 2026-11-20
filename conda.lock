@@ -72,7 +72,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/linux-64/fmt-12.1.0-h76c4fd7_1.conda
         - conda: 
@@ -95,8 +95,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -186,7 +184,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -351,7 +349,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/osx-arm64/fmt-12.1.0-h99e4e11_1.conda
         - conda: 
@@ -374,8 +372,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -455,7 +451,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -620,7 +616,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/win-64/fmt-12.1.0-h1ced75a_1.conda
         - conda: 
@@ -645,8 +641,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -718,7 +712,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -895,7 +889,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/linux-64/fmt-12.1.0-h76c4fd7_1.conda
         - conda: 
@@ -918,8 +912,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -1011,7 +1003,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh8b19718_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -1178,7 +1170,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/osx-arm64/fmt-12.1.0-h99e4e11_1.conda
         - conda: 
@@ -1201,8 +1193,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -1280,7 +1270,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh8b19718_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -1447,7 +1437,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/win-64/fmt-12.1.0-h1ced75a_1.conda
         - conda: 
@@ -1472,8 +1462,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -1543,7 +1531,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh8b19718_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -1722,7 +1710,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/linux-64/fmt-12.1.0-h76c4fd7_1.conda
         - conda: 
@@ -1745,8 +1733,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -1836,7 +1822,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -2001,7 +1987,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/osx-arm64/fmt-12.1.0-h99e4e11_1.conda
         - conda: 
@@ -2024,8 +2010,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -2105,7 +2089,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -2270,7 +2254,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/win-64/fmt-12.1.0-h1ced75a_1.conda
         - conda: 
@@ -2295,8 +2279,6 @@ environments:
             https://conda.anaconda.org/conda-forge/noarch/iniconfig-2.3.1-pyhd8ed1ab_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-        - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
@@ -2368,7 +2350,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -2565,8 +2547,6 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
-        - conda: 
             https://conda.anaconda.org/conda-forge/linux-64/keyutils-1.6.3-h7cc23a3_1.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/linux-64/krb5-1.22.2-hbc21106_2.conda
@@ -2651,7 +2631,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -2844,8 +2824,6 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
-        - conda: 
             https://conda.anaconda.org/conda-forge/osx-arm64/krb5-1.22.2-h34f8a20_2.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/osx-arm64/libarchive-3.8.11-gpl_h54b43b9_101.conda
@@ -2920,7 +2898,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -3115,8 +3093,6 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
-        - conda: 
             https://conda.anaconda.org/conda-forge/win-64/krb5-1.22.2-h719d79b_2.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/win-64/libarchive-3.8.11-gpl_hcdebe0b_101.conda
@@ -3183,7 +3159,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -3422,8 +3398,6 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
-        - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
@@ -3530,7 +3504,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pkginfo-2.0-pyh5ded981_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -3765,8 +3739,6 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
-        - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
@@ -3871,7 +3843,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pkginfo-2.0-pyh5ded981_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -4102,8 +4074,6 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
-        - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
@@ -4190,7 +4160,7 @@ environments:
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pkginfo-2.0-pyh5ded981_0.conda
         - conda: 
-            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+            https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
         - conda: 
             https://conda.anaconda.org/conda-forge/noarch/pluggy-1.7.0-pyh5ded981_0.conda
         - conda: 
@@ -4759,15 +4729,16 @@ packages:
     conda: 
       https://conda.anaconda.org/conda-forge/noarch/editables-0.6-pyhcf101f3_0.conda
   - build_number: 0
-    sha256: ee6cf346d017d954255bbcbdb424cddea4d14e4ed7e9813e429db1d795d01144
-    md5: 8e662bd460bda79b1ea39194e3c4c9ab
+    sha256: 91df6efaccbc119fc485d31bf6e32ca02b3f52e6def22b4fece6ddc1a98683a1
+    md5: 0af4199bba4905751d25634be9caf7bc
     license: MIT and PSF-2.0
-    size: 21333
+    size: 24576
     depends:
-      - python >=3.10
+      - python >=3.11
       - typing_extensions >=4.6.0
+      - python
     conda: 
-      https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.1-pyhd8ed1ab_0.conda
+      https://conda.anaconda.org/conda-forge/noarch/exceptiongroup-1.3.2-pyh5ded981_0.conda
   - build_number: 1
     sha256: 25d14a197601fdd616f2e501431b52887e69b31e7defbc1679381d718357ceb7
     md5: a70bb6d42ad121aef456e0007e92bed6
@@ -4919,17 +4890,6 @@ packages:
       - python
     conda: 
       https://conda.anaconda.org/conda-forge/noarch/jinja2-3.1.6-pyhcf101f3_1.conda
-  - build_number: 0
-    sha256: b3b91fb567775a26da542412c4f24da60af040ade3bec5458a88994da6d3453f
-    md5: d2c56ec6f9629d2efeafc806d347ba43
-    license: MIT
-    license_family: MIT
-    size: 15185
-    depends:
-      - python >=3.11
-      - python
-    conda: 
-      https://conda.anaconda.org/conda-forge/noarch/json-with-comments-1.3.0-pyh5ded981_0.conda
   - build_number: 1
     sha256: 328756a4555941d57af4a5f553e5d8598e9f3b37db028f557e30f9f0b3086db6
     md5: 204b5ca91eba7738790ecc333facbbbe
@@ -5510,15 +5470,15 @@ packages:
     conda: 
       https://conda.anaconda.org/conda-forge/noarch/pip-26.2.2-pyh145f28c_2.conda
   - build_number: 0
-    sha256: 961bf26704dc91e4c90e04d73b4553237a3f8fd3e28c1602375da4b5162f8319
-    md5: f5ead77823454e222b1e7c4d8266f6c3
+    sha256: b90d4f1eefe9d1d50925c0e12eac9e0d3ac5fa6167e5929fd249d0fbeca15a80
+    md5: 931c5dbcadedadde154b21fddc8c951d
     license: MIT
-    size: 90635
+    size: 93566
     depends:
       - python >=3.11
       - python
     conda: 
-      https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.7-pyh5ded981_0.conda
+      https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.14.8-pyh5ded981_0.conda
   - build_number: 0
     sha256: 34c40106bc3172b3a47656e84837e13a5d4829d413d65f30fb214e7568a09cea
     md5: 50c6bcd41b7ceaaeeea8852e3198663e

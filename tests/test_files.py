@@ -73,18 +73,9 @@ def test_load_json_rejects_duplicate_keys_and_nonfinite_values():
 @pytest.mark.parametrize(
     "raw", [b'{// comment\n"name":"example",}', b'{"name":"example"/* comment */}']
 )
-def test_load_json_accepts_jsonc_only_when_requested(raw: bytes):
-    assert load_json(raw, comments=True) == {"name": "example"}
+def test_load_json_rejects_comments_and_trailing_commas(raw: bytes):
     with pytest.raises(ValueError):
         load_json(raw)
-
-
-@pytest.mark.parametrize(
-    "raw", [b'{"name":"one","name":"two"}', b'{"number":NaN}', b"\xff"]
-)
-def test_load_jsonc_keeps_strict_duplicate_nonfinite_and_utf8_rejection(raw: bytes):
-    with pytest.raises(ValueError):
-        load_json(raw, comments=True)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")

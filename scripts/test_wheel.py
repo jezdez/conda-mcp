@@ -60,7 +60,6 @@ def main() -> None:
                 "python>=3.11",
                 "rich>=13",
                 "tomlkit>=0.13",
-                "json-with-comments>=1.3",
                 "pip",
             ],
             env=environment,

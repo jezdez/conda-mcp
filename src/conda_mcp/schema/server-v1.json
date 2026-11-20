@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "name", "description"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "name": {"type": "string", "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$)[a-z0-9][a-z0-9_-]{0,63}$"},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1024, "pattern": "\\S"},
+    "registry_name": {"type": "string"},
+    "stdio": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+          "not": {"pattern": "^(?:[cC][oO][nN]|[pP][rR][nN]|[aA][uU][xX]|[nN][uU][lL]|[cC][oO][mM][1-9]|[lL][pP][tT][1-9])$|\\.(?:[bB][aA][tT]|[cC][mM][dD])$"}
+        },
+        "args": {"type": "array", "items": {"type": "string", "not": {"pattern": "\\u0000"}}},
+        "environment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "required"],
+            "properties": {
+              "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+              "required": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "http": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {"type": "string", "pattern": "^https://[^/?#@\\s\\\\{}]+(?:/[^?#\\s\\\\{}]*)?$"},
+        "bearer_token_env": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "header_env": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$",
+            "not": {"pattern": "^(?:[pP][rR][oO][xX][yY]-|[mM][cC][pP]-)|^(?:[hH][oO][sS][tT]|[cC][oO][nN][nN][eE][cC][tT][iI][oO][nN]|[cC][oO][nN][tT][eE][nN][tT]-[lL][eE][nN][gG][tT][hH]|[tT][rR][aA][nN][sS][fF][eE][rR]-[eE][nN][cC][oO][dD][iI][nN][gG]|[uU][pP][gG][rR][aA][dD][eE]|[tT][eE]|[tT][rR][aA][iI][lL][eE][rR]|[kK][eE][eE][pP]-[aA][lL][iI][vV][eE]|[aA][cC][cC][eE][pP][tT]|[cC][oO][nN][tT][eE][nN][tT]-[tT][yY][pP][eE]|[aA][uU][tT][hH][oO][rR][iI][zZ][aA][tT][iI][oO][nN]|[cC][oO][oO][kK][iI][eE]|[sS][eE][tT]-[cC][oO][oO][kK][iI][eE])$"}
+          },
+          "additionalProperties": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "oneOf": [{"required": ["stdio"]}, {"required": ["http"]}]
+}

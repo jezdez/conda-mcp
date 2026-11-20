@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "conda-mcp"
+description = "Discover, run, and configure MCP servers installed in conda environments"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = ["rich>=13", "tomlkit>=0.13", "json-with-comments>=1.3"]
+dynamic = ["version"]
+
+[project.entry-points.conda]
+conda-mcp = "conda_mcp.plugin"
+
+[project.urls]
+Source = "https://github.com/jezdez/conda-mcp"
+Issues = "https://github.com/jezdez/conda-mcp/issues"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.1.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/conda_mcp/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/conda_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/scripts", "/docs", "/examples", "/recipe", "/pyproject.toml", "/conda.toml", "/conda.lock", "/LICENSE", "/README.md", "/AGENTS.md", "/CONTRIBUTING.md", "/RELEASING.md"]
+exclude = ["/docs/_build"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --cov --cov-report=term-missing --cov-report=xml:coverage.xml"
+
+[tool.coverage.run]
+source = ["conda_mcp"]
+relative_files = true
+branch = true
+patch = ["subprocess"]
+omit = ["*/conda_mcp/_version.py"]
+
+[tool.coverage.paths]
+source = ["src/conda_mcp", "*/src/conda_mcp", '*\\src\\conda_mcp']
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+fail_under = 95
+
+[tool.ruff]
+target-version = "py311"
+extend-exclude = ["src/conda_mcp/_version.py", "output", "conda-dist", "conda-build-dist", "docs/_build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ty.src]
+exclude = ["src/conda_mcp/_version.py"]
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"

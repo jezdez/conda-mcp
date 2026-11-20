@@ -1,0 +1,35 @@
+schema_version: 1
+
+package:
+  name: example-fastmcp-server
+  version: 1.0.0
+
+source:
+  path: .
+
+build:
+  noarch: python
+  python:
+    entry_points:
+      - example-fastmcp = example_fastmcp:main
+  script:
+    - python -m pip install . --no-deps --no-build-isolation
+    - python install.py
+
+requirements:
+  host:
+    - python >=3.11
+    - pip
+    - hatchling
+  run:
+    - python >=3.11
+    - fastmcp >=2
+
+tests:
+  - package_contents:
+      files:
+        - share/conda-mcp/servers/fastmcp-example.json
+  - script: python smoke.py
+    files:
+      source:
+        - smoke.py

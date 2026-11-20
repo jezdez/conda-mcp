@@ -1,0 +1,31 @@
+schema_version: 1
+
+package:
+  name: example-node-mcp-server
+  version: 1.0.0
+
+source:
+  path: .
+
+build:
+  noarch: python
+  python:
+    entry_points:
+      - example-node-mcp = example_node_mcp:main
+  script:
+    - python -m pip install . --no-deps --no-build-isolation
+    - python install.py
+
+requirements:
+  host:
+    - python >=3.11
+    - pip
+    - hatchling
+  run:
+    - python >=3.11
+    - nodejs >=20
+
+tests:
+  - package_contents:
+      files:
+        - share/conda-mcp/servers/node-example.json

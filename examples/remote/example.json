@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "example",
+  "description": "Placeholder endpoint for testing client configuration",
+  "http": {"url": "https://example.invalid/mcp"}
+}

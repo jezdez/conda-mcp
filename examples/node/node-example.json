@@ -1,0 +1,1 @@
+{"schema_version": 1, "name": "node-example", "description": "A Node stdio greeting server", "stdio": {"command": "example-node-mcp"}}

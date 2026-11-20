@@ -1,0 +1,55 @@
+schema_version: 1
+
+context:
+  version: ${{ env.get("CONDA_MCP_VERSION") }}
+  source_sha256: ${{ env.get("CONDA_MCP_SOURCE_SHA256", default="") }}
+
+package:
+  name: conda-mcp
+  version: ${{ version }}
+
+source:
+  - if: source_sha256 != ""
+    then:
+      url: https://files.pythonhosted.org/packages/source/c/conda_mcp/conda_mcp-${{ version }}.tar.gz
+      sha256: ${{ source_sha256 }}
+    else:
+      path: ..
+
+build:
+  noarch: python
+  script:
+    - if: source_sha256 == ""
+      then:
+        - if: win
+          then: set "SETUPTOOLS_SCM_PRETEND_VERSION=${{ version }}"
+          else: export SETUPTOOLS_SCM_PRETEND_VERSION="${{ version }}"
+    - python -m pip install . --no-deps --no-build-isolation
+
+requirements:
+  host:
+    - python 3.11.*
+    - pip
+    - hatchling >=1.27
+    - hatch-vcs >=0.4
+  run:
+    - python >=3.11
+    - conda >=26.10
+    - rich >=13
+    - tomlkit >=0.13
+    - json-with-comments >=1.3
+
+tests:
+  - python:
+      imports:
+        - conda_mcp.plugin
+      pip_check: true
+  - script: python scripts/smoke_plugin.py
+    files:
+      source:
+        - scripts/smoke_plugin.py
+
+about:
+  summary: Discover, run, and configure conda-packaged MCP servers
+  license: Apache-2.0
+  license_file: LICENSE

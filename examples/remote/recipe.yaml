@@ -1,0 +1,24 @@
+schema_version: 1
+
+package:
+  name: example-mcp-endpoint
+  version: ${{ env.get('EXAMPLE_MCP_VERSION', default='1.0.0') }}
+
+source:
+  path: .
+
+build:
+  noarch: generic
+  script: python install.py
+
+requirements:
+  build:
+    - python >=3.11
+
+tests:
+  - package_contents:
+      files:
+        - share/conda-mcp/servers/example.json
+
+about:
+  summary: Example conda-packaged MCP endpoint declaration

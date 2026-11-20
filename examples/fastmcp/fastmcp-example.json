@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "fastmcp-example",
+  "description": "A local greeting tool built with FastMCP",
+  "stdio": {"command": "example-fastmcp"}
+}

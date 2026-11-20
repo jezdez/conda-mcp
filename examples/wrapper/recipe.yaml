@@ -1,0 +1,23 @@
+schema_version: 1
+
+package:
+  name: example-mcp-wrapper
+  version: 1.0.0
+
+source:
+  path: .
+
+build:
+  noarch: generic
+  script: python install.py
+
+requirements:
+  build:
+    - python >=3.11
+  run:
+    - nodejs >=20
+
+tests:
+  - package_contents:
+      files:
+        - share/conda-mcp/servers/wrapper-example.json

@@ -238,9 +238,13 @@ def restore_protocol(payload: dict[str, object]) -> None:
         stdout_handle = payload["stdout_handle"]
     except (KeyError, TypeError, ValueError) as exc:
         raise CondaError("Invalid Windows protocol handles.") from exc
-    if any(
-        not isinstance(handle, int) or isinstance(handle, bool) or handle <= 0
-        for handle in (stdin_handle, stdout_handle)
+    if (
+        not isinstance(stdin_handle, int)
+        or isinstance(stdin_handle, bool)
+        or stdin_handle <= 0
+        or not isinstance(stdout_handle, int)
+        or isinstance(stdout_handle, bool)
+        or stdout_handle <= 0
     ):
         raise CondaError("Invalid Windows protocol handles.")
     for handle, target, standard in (

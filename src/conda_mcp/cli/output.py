@@ -31,7 +31,7 @@ def table(columns: tuple[str, ...], rows: Iterable[Iterable[object]]) -> None:
 
 def message(value: object) -> None:
     """Print one literal human confirmation or empty state."""
-    Console(markup=False, highlight=False).print(Text(literal(value)))
+    print(literal(value))
 
 
 def structured(result: object) -> None:

@@ -142,13 +142,13 @@ def atomic_write(
 @contextmanager
 def open_lock(path: Path) -> Generator[BinaryIO]:
     """Open a private binary regular lock file without replacing its inode."""
+    parents: list[int] = []
     if os.name == "nt":
         try:
             parents = _open_windows_parents(path, create=True)
             descriptor = _windows_fd(path, _GENERIC_READ | _GENERIC_WRITE, _OPEN_ALWAYS)
         except BaseException:
-            if "parents" in locals():
-                _close_windows(parents)
+            _close_windows(parents)
             raise
     else:
         parent, name, bindings = _create_parents(path)
@@ -189,6 +189,8 @@ def open_lock(path: Path) -> Generator[BinaryIO]:
 
 def _open_parent(path: Path) -> tuple[int, str, list[tuple[Path, os.stat_result]]]:
     """Anchor every existing POSIX parent and retain pathname identities."""
+    if os.name == "nt":
+        raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     if ".." in path.parts or not path.is_absolute() or len(path.parts) < 2:
         raise ValueError("Unsafe path traversal.")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -228,6 +230,8 @@ def _check_bindings(bindings: list[tuple[Path, os.stat_result]]) -> None:
 
 def _create_parents(path: Path) -> tuple[int, str, list[tuple[Path, os.stat_result]]]:
     """Create POSIX parents relative to verified directory descriptors."""
+    if os.name == "nt":
+        raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     if ".." in path.parts or not path.is_absolute() or len(path.parts) < 2:
         raise ValueError("Unsafe path traversal.")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -259,6 +263,8 @@ def _read_descriptor(
     parent: int, name: str, limit: int, missing_ok: bool
 ) -> bytes | None:
     """Read a bounded regular leaf relative to an anchored parent."""
+    if os.name == "nt":
+        raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
     try:
         descriptor = os.open(name, flags, dir_fd=parent)
@@ -427,6 +433,8 @@ def _atomic_write_descriptor(
     bindings: list[tuple[Path, os.stat_result]],
 ) -> None:
     """Replace a leaf through an anchored POSIX directory descriptor."""
+    if os.name == "nt":
+        raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     previous = _read_descriptor(parent, name, limit, True)
     if previous != expected:
         raise ValueError("File changed during the operation.")

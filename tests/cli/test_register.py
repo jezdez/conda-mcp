@@ -55,16 +55,27 @@ def test_human_register_confirmation_warns_both_shared_clients(cli, remote):
     assert "{'" not in result.stdout
 
 
+@pytest.mark.parametrize("columns", ["40", "80"])
 def test_register_dry_run_shows_destination_and_entry_without_writes(
-    cli, tmp_path, remote
+    cli, tmp_path, remote, columns
 ):
     result = cli(
-        "register", "demo", "-p", str(remote), "--client", "codex", "--dry-run"
+        "register",
+        "demo",
+        "-p",
+        str(remote),
+        "--client",
+        "codex",
+        "--dry-run",
+        env={"COLUMNS": columns},
     )
     assert result.returncode == 0, result.stderr + result.stdout
     assert "Would register demo" in result.stdout
-    assert "config.toml" in result.stdout
-    assert "bearer_token_env_var" in result.stdout
+    assert str(tmp_path / "project" / ".codex" / "config.toml") in result.stdout
+    assert json.loads(result.stdout.splitlines()[-1]) == {
+        "url": "https://example.org/mcp",
+        "bearer_token_env_var": "TOKEN",
+    }
     assert not (tmp_path / "project" / ".codex").exists()
 
 

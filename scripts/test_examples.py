@@ -237,6 +237,7 @@ def main() -> None:
             CONDARC=str(condarc),
             CONDA_PKGS_DIRS=str(root / "packages"),
             CONDA_ENVS_PATH=str(root / "envs"),
+            RATTLER_CACHE_DIR=str(root / "rattler-cache"),
         )
         output = root / "output"
         artifacts = _build(output, environment)

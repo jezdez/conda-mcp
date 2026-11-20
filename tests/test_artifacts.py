@@ -111,6 +111,39 @@ def test_wheel_script_creates_an_isolated_conda_environment(
     assert smoke[0][-2:] == ["--expected-version", "1.2.3"]
 
 
+def test_example_script_passes_an_isolated_rattler_cache_to_builders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Example builds must not depend on a Windows profile cache location."""
+    test_examples = _script_module("test_examples")
+    environments: list[dict[str, str]] = []
+
+    class StopAfterFirstBuild(Exception):
+        pass
+
+    def record_version(
+        arguments: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(arguments, 0, stdout="1.2.3\n")
+
+    def record_build(
+        arguments: list[str], *, environment: dict[str, str], cwd: Path
+    ) -> None:
+        environments.append(environment)
+        raise StopAfterFirstBuild
+
+    monkeypatch.setattr(test_examples.subprocess, "run", record_version)
+    monkeypatch.setattr(test_examples, "_build_run", record_build)
+
+    with pytest.raises(StopAfterFirstBuild):
+        test_examples.main()
+
+    environment = environments[0]
+    cache = Path(environment["RATTLER_CACHE_DIR"])
+    assert cache.parent == Path(environment["HOME"]).parent
+    assert cache.name == "rattler-cache"
+
+
 @pytest.mark.skipif(
     shutil.which("node") is None, reason="Node runs in the artifact environment"
 )

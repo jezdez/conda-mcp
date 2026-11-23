@@ -31,6 +31,9 @@ build-conda = { cmd = 'version=$(python -m hatchling version) && CONDA_MCP_VERSI
 docs = { cmd = "sphinx-build -W --keep-going -n -b dirhtml docs docs/_build/dirhtml", default-environment = "docs" }
 check-workflows = { cmd = "actionlint", default-environment = "build" }
 
+[target.win-64.dependencies]
+pywin32 = ">=311"
+
 [target.win-64.tasks]
 build-conda = { cmd = ["powershell", "-NoProfile", "-Command", '$version = python -m hatchling version; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; $env:CONDA_MCP_VERSION = $version; rattler-build build -r recipe/recipe.yaml --output-dir conda-dist -c conda-forge; exit $LASTEXITCODE'], default-environment = "build" }
 

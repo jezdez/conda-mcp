@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -386,3 +387,39 @@ async def test_manager_commands_follow_the_same_policy(
     assert "conda_mcp_serve" not in names
     assert allowed.structured_content["exit_code"] == 0
     assert executor.calls == [("mcp", "list")]
+
+
+@pytest.mark.parametrize(
+    ("allow_write", "allow_exec", "spawned"),
+    [
+        (False, False, [("info",)]),
+        (True, False, [("info",), ("install",)]),
+        (False, True, [("info",), ("run",), ("info",)]),
+        (True, True, [("info",), ("install",), ("run",), ("info",)]),
+    ],
+)
+@pytest.mark.anyio
+async def test_write_and_exec_combinations_bound_spawning(
+    server_factory: ServerFactory,
+    allow_write: bool,
+    allow_exec: bool,
+    spawned: list[tuple[str, ...]],
+) -> None:
+    executor = RecordingExecutor()
+    server = server_factory(
+        executor,
+        (Command(name="info"), Command(name="install"), Command(name="run")),
+        SafetyPolicy(allow_write=allow_write, allow_exec=allow_exec),
+    )
+
+    async with Client(server.server) as client:
+        await client.call_tool("conda_info", {})
+        for name, arguments in (
+            ("conda_install", {}),
+            ("conda_run", {}),
+            (EXECUTE_TOOL_NAME, {"argv": ["info"]}),
+        ):
+            with contextlib.suppress(MCPError):
+                await client.call_tool(name, arguments)
+
+    assert executor.calls == spawned

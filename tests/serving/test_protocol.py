@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import anyio
 import pytest
@@ -34,3 +35,19 @@ async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
     assert result.is_error is False
     assert result.content
     assert "generated_tools" in capabilities.contents[0].text
+
+
+def test_disabled_plugins_do_not_start_a_server() -> None:
+    conda = shutil.which("conda")
+    if conda is None:
+        pytest.skip("conda is not installed")
+
+    completed = subprocess.run(
+        [conda, "--no-plugins", "mcp", "serve"],
+        input=b"",
+        capture_output=True,
+        timeout=120,
+    )
+
+    assert completed.returncode != 0
+    assert b"jsonrpc" not in completed.stdout

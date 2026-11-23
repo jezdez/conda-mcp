@@ -7,6 +7,7 @@ name = "conda-mcp"
 description = "Discover, run, and configure MCP servers installed in conda environments"
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
 dependencies = ["anyio>=4.9", "jsonschema>=4.20", "mcp>=2,<3", "rich>=13", "tomlkit>=0.13"]
 dynamic = ["version"]
@@ -31,7 +32,7 @@ version-file = "src/conda_mcp/_version.py"
 packages = ["src/conda_mcp"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/scripts", "/docs", "/demos", "/examples", "/recipe", "/pyproject.toml", "/conda.toml", "/conda.lock", "/LICENSE", "/README.md", "/AGENTS.md", "/CONTRIBUTING.md", "/RELEASING.md"]
+include = ["/src", "/tests", "/scripts", "/docs", "/demos", "/examples", "/recipe", "/pyproject.toml", "/conda.toml", "/conda.lock", "/LICENSE", "/THIRD_PARTY_NOTICES.md", "/README.md", "/AGENTS.md", "/CONTRIBUTING.md", "/RELEASING.md"]
 exclude = ["/docs/_build"]
 
 [tool.pytest.ini_options]

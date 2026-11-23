@@ -23,6 +23,7 @@ REQUIRED_SDIST_PATHS = {
     "examples/remote/recipe.yaml",
     "examples/wrapper/recipe.yaml",
     "recipe/conda-cli.json",
+    "THIRD_PARTY_NOTICES.md",
 }
 FORBIDDEN_PREFIXES = ("output/", "conda-dist/", "build/", "dist/", ".pytest_cache/")
 

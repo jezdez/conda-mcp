@@ -2,7 +2,7 @@
 
 Discover, run, and configure MCP servers installed in conda environments. Conda installs, updates, and removes the software and its dependencies. `conda mcp` reads package-owned declarations and connects them to native client configuration. `conda mcp serve` exposes the installation that launched it through MCP. The conda package records a `conda-cli` declaration for that server.
 
-This project is unreleased. Install a locally built `conda-mcp` package into the environment that runs conda. Do not assume the package is available from a public channel. Server packages can live in a separate environment. See the [first-server tutorial](docs/tutorials/first-server.md) and [contributor checks](CONTRIBUTING.md).
+This project requires Python 3.11 or newer and conda 26.10 or newer on linux-64, osx-arm64, or win-64. This project is unreleased. Install a locally built `conda-mcp` package into the environment that runs conda. Do not assume the package is available from a public channel. Server packages can live in a separate environment. See the [first-server tutorial](docs/tutorials/first-server.md) and [contributor checks](CONTRIBUTING.md).
 
 Watch the [terminal demos](docs/demos.md) for declaration review and project-local client registration, with text equivalents for each recording.
 

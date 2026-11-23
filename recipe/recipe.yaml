@@ -41,6 +41,8 @@ requirements:
     - mcp >=2,<3
     - rich >=13
     - tomlkit >=0.13
+  run_constraints:
+    - conda-cli-mcp <0a0
 
 tests:
   - python:

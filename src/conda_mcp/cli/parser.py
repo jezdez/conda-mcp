@@ -34,6 +34,9 @@ def configure(parser: ArgumentParser) -> None:
     serve.add_argument(
         "--allow-exec", action="store_true", help="Expose raw argv execution."
     )
+    from ..serving import __version__
+
+    serve.add_argument("--version", action="version", version=__version__)
     listing = commands.add_parser(
         "list", help="List package-owned servers in the source environment."
     )

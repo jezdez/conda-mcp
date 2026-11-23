@@ -592,3 +592,21 @@ def test_module_entry_point_prints_catalog_json(
 
     assert program.prog == "target-conda"
     assert program.conda_version == "99.1"
+
+
+def test_completion_reports_unavailable_without_conda_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from importlib import metadata as importlib_metadata
+
+    from conda_mcp.serving import discovery
+
+    def missing(_name: str) -> str:
+        raise importlib_metadata.PackageNotFoundError
+
+    monkeypatch.setattr(discovery.metadata, "version", missing)
+
+    payload = inspect_completion_command(["env", "list"])
+
+    assert payload["availability"] == "not_installed"
+    assert payload["hint"]

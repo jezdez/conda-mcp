@@ -26,9 +26,11 @@ async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
             await session.initialize()
             tools = {tool.name for tool in (await session.list_tools()).tools}
             result = await session.call_tool("conda_info", {"json": True})
+            capabilities = await session.read_resource("conda://capabilities")
 
     assert "conda_info" in tools
     assert "conda_execute" not in tools
     assert "conda_mcp_serve" not in tools
     assert result.is_error is False
     assert result.content
+    assert "generated_tools" in capabilities.contents[0].text

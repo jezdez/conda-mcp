@@ -359,3 +359,30 @@ async def test_failed_mutation_does_not_request_restart(
     assert result.is_error
     assert result.structured_content["restart_required"] is False
     assert executor.plugin_state_calls == 0
+
+
+@pytest.mark.anyio
+async def test_manager_commands_follow_the_same_policy(
+    server_factory: ServerFactory,
+) -> None:
+    executor = RecordingExecutor()
+    manager = Command(
+        name="mcp",
+        terminal=False,
+        children=(
+            Command(name="list"),
+            Command(name="register"),
+            Command(name="serve"),
+        ),
+    )
+    server = server_factory(executor, (manager,), SafetyPolicy())
+
+    async with Client(server.server) as client:
+        names = {tool.name for tool in (await client.list_tools()).tools}
+        allowed = await client.call_tool("conda_mcp_list", {})
+        with pytest.raises(MCPError):
+            await client.call_tool("conda_mcp_register", {})
+
+    assert "conda_mcp_serve" not in names
+    assert allowed.structured_content["exit_code"] == 0
+    assert executor.calls == [("mcp", "list")]

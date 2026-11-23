@@ -87,6 +87,24 @@ def test_serve_accepts_target_and_limits(parser):
     assert args.allow_exec is False
 
 
+def test_serve_reports_version_without_starting(parser, capsys):
+    with pytest.raises(SystemExit) as error:
+        parser.parse_args(["serve", "--version"])
+
+    assert error.value.code == 0
+    assert capsys.readouterr().out.strip()
+
+
+def test_serve_rejects_invalid_timeout(parser):
+    from conda.exceptions import CondaValueError
+
+    from conda_mcp.cli.serve import execute
+
+    args = parser.parse_args(["serve", "--timeout", "0"])
+    with pytest.raises(CondaValueError, match="greater than zero"):
+        execute(args)
+
+
 def test_run_preserves_remainder(parser):
     args = parser.parse_args(
         ["run", "-p", "/prefix", "example", "--", "", "--json", "a b"]

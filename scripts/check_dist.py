@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRES = {"rich>=13", "tomlkit>=0.13"}
+REQUIRES = {"anyio>=4.9", "jsonschema>=4.20", "mcp<3,>=2", "rich>=13", "tomlkit>=0.13"}
 REQUIRED_SDIST_PATHS = {
     "src/conda_mcp/schema/server-v1.json",
     "tests/conftest.py",
@@ -22,6 +22,7 @@ REQUIRED_SDIST_PATHS = {
     "examples/node/recipe.yaml",
     "examples/remote/recipe.yaml",
     "examples/wrapper/recipe.yaml",
+    "recipe/conda-cli.json",
 }
 FORBIDDEN_PREFIXES = ("output/", "conda-dist/", "build/", "dist/", ".pytest_cache/")
 

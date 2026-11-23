@@ -25,6 +25,7 @@ build:
           then: set "SETUPTOOLS_SCM_PRETEND_VERSION=${{ version }}"
           else: export SETUPTOOLS_SCM_PRETEND_VERSION="${{ version }}"
     - python -m pip install . --no-deps --no-build-isolation
+    - python -c "import os, shutil; target = os.path.join(os.environ['PREFIX'], 'share', 'conda-mcp', 'servers'); os.makedirs(target, exist_ok=True); shutil.copy2(os.path.join('recipe', 'conda-cli.json'), target)"
 
 requirements:
   host:
@@ -35,6 +36,9 @@ requirements:
   run:
     - python >=3.11
     - conda >=26.10
+    - anyio >=4.9
+    - jsonschema >=4.20
+    - mcp >=2,<3
     - rich >=13
     - tomlkit >=0.13
 

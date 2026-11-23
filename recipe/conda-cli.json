@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "conda-cli",
+  "description": "Expose this conda installation through MCP",
+  "stdio": {
+    "command": "conda",
+    "args": ["mcp", "serve"]
+  }
+}

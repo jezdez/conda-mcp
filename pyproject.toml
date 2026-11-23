@@ -9,7 +9,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11"
-dependencies = ["anyio>=4.9", "jsonschema>=4.20", "mcp>=2,<3", "pywin32>=311; sys_platform == 'win32'", "rich>=13", "tomlkit>=0.13"]
+dependencies = ["anyio>=4.9", "jsonschema>=4.20", "mcp>=2,<3", "rich>=13", "tomlkit>=0.13"]
 dynamic = ["version"]
 
 [project.entry-points.conda]

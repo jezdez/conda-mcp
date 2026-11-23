@@ -9,14 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRES = {
-    "anyio>=4.9",
-    "jsonschema>=4.20",
-    "mcp<3,>=2",
-    "pywin32>=311;sys_platform=='win32'",
-    "rich>=13",
-    "tomlkit>=0.13",
-}
+REQUIRES = {"anyio>=4.9", "jsonschema>=4.20", "mcp<3,>=2", "rich>=13", "tomlkit>=0.13"}
 REQUIRED_SDIST_PATHS = {
     "src/conda_mcp/schema/server-v1.json",
     "tests/conftest.py",

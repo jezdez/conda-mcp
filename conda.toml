@@ -6,6 +6,9 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 [dependencies]
 python = ">=3.11,<3.15"
 conda = ">=26.10"
+anyio = ">=4.9"
+jsonschema = ">=4.20"
+mcp = ">=2,<3"
 rich = ">=13"
 tomlkit = ">=0.13"
 
@@ -43,7 +46,6 @@ coverage = ">=7.10.6"
 pip = "*"
 hatchling = ">=1.27"
 hatch-vcs = ">=0.4"
-jsonschema = ">=4"
 
 [feature.py311.dependencies]
 python = "3.11.*"

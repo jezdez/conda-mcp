@@ -1,0 +1,34 @@
+"""Exercise the installed MCP server over real stdio."""
+
+from __future__ import annotations
+
+import shutil
+
+import anyio
+import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+
+@pytest.mark.anyio
+async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
+    conda = shutil.which("conda")
+    if conda is None:
+        pytest.skip("conda is not installed")
+
+    parameters = StdioServerParameters(command=conda, args=["mcp", "serve"])
+
+    with anyio.fail_after(300):
+        async with (
+            stdio_client(parameters) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            tools = {tool.name for tool in (await session.list_tools()).tools}
+            result = await session.call_tool("conda_info", {"json": True})
+
+    assert "conda_info" in tools
+    assert "conda_execute" not in tools
+    assert "conda_mcp_serve" not in tools
+    assert result.is_error is False
+    assert result.content

@@ -33,7 +33,7 @@ async def serve(
         )
         plugins = ()
     capabilities = Capabilities(
-        target_executable=str(executor.executable),
+        conda_executable=str(executor.executable),
         program=program,
         plugins=plugins,
     )

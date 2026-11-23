@@ -46,7 +46,7 @@ def plugin_fingerprint(conda_version: str, plugins: Iterable[Plugin]) -> str:
 class Capabilities:
     """Safe, immutable metadata for one discovered conda installation."""
 
-    target_executable: str
+    conda_executable: str
     program: Program
     plugins: tuple[Plugin, ...]
 
@@ -63,7 +63,7 @@ class Capabilities:
     def as_dict(self) -> dict[str, JsonValue]:
         """Return the stable, safe capability representation."""
         return {
-            "target_executable": self.target_executable,
+            "conda_executable": self.conda_executable,
             "conda_version": self.program.conda_version,
             "catalog": self.program.as_dict(),
             "generated_tools": list(self.generated_tools),

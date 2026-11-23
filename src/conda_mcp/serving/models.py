@@ -251,7 +251,7 @@ class Diagnostic:
 
 @dataclass(frozen=True, slots=True)
 class Program:
-    """The immutable CLI catalog discovered in a target conda environment."""
+    """The immutable CLI catalog discovered in this conda environment."""
 
     prog: str
     conda_version: str

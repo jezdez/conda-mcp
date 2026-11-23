@@ -88,7 +88,7 @@ def inspect_plugins() -> tuple[Plugin, ...]:
 def inspect_completion_command(
     command_path: Sequence[str],
 ) -> dict[str, JsonValue]:
-    """Read one command from conda-completion through its public target API."""
+    """Read one command from conda-completion through its public API."""
     requested = tuple(command_path)
     if any(
         not part or part.startswith("-") or any(char.isspace() for char in part)
@@ -103,7 +103,7 @@ def inspect_completion_command(
         "alias_target": None,
         "command": None,
         "manifest": None,
-        "hint": "Install conda-completion in the target conda environment.",
+        "hint": "Install conda-completion in this conda environment.",
     }
     try:
         completion_exceptions = import_module("conda_completion.exceptions")
@@ -116,9 +116,7 @@ def inspect_completion_command(
         return {
             **unavailable,
             "availability": "unavailable",
-            "hint": (
-                "Repair the conda-completion installation in the target environment."
-            ),
+            "hint": ("Repair the conda-completion installation in this environment."),
         }
     except ImportError:
         return {
@@ -140,7 +138,7 @@ def inspect_completion_command(
             return {
                 **unavailable,
                 "availability": "unavailable",
-                "hint": "Use conda-completion 0.3 or newer in the target environment.",
+                "hint": "Use conda-completion 0.3 or newer in this environment.",
             }
 
     required_functions = (
@@ -153,7 +151,7 @@ def inspect_completion_command(
         return {
             **unavailable,
             "availability": "unavailable",
-            "hint": "Use conda-completion 0.3 or newer in the target environment.",
+            "hint": "Use conda-completion 0.3 or newer in this environment.",
         }
 
     path = completion_paths.manifest_path()
@@ -163,13 +161,13 @@ def inspect_completion_command(
         return {
             **unavailable,
             "availability": "not_generated",
-            "hint": "Run 'conda completion generate' in the target environment.",
+            "hint": "Run 'conda completion generate' in this environment.",
         }
     except (completion_exceptions.ManifestError, OSError):
         return {
             **unavailable,
             "availability": "unavailable",
-            "hint": "Regenerate completion.msgpack in the target environment.",
+            "hint": "Regenerate completion.msgpack in this environment.",
         }
 
     if not all(
@@ -187,7 +185,7 @@ def inspect_completion_command(
         return {
             **unavailable,
             "availability": "unavailable",
-            "hint": "Use conda-completion 0.3 or newer in the target environment.",
+            "hint": "Use conda-completion 0.3 or newer in this environment.",
         }
 
     resolved = list(requested)
@@ -241,7 +239,7 @@ def inspect_completion_command(
         return {
             **unavailable,
             "availability": "unavailable",
-            "hint": "Use conda-completion 0.3 or newer in the target environment.",
+            "hint": "Use conda-completion 0.3 or newer in this environment.",
         }
 
     return {

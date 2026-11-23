@@ -325,7 +325,7 @@ class CondaMCPServer:
         self,
         arguments: dict[str, Any],
     ) -> CallToolResult:
-        """Return one target conda-completion command description."""
+        """Return one conda-completion command description."""
         try:
             self.completion_input_validator.validate(arguments)
         except ValidationError as error:

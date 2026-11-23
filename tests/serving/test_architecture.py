@@ -23,16 +23,12 @@ def test_argparse_internals_and_conda_imports_are_isolated() -> None:
                 )
             ):
                 violations.append(f"{source_path.name}:{node.lineno}")
-            if (
-                source_path.name != "plugin.py"
-                and isinstance(node, ast.ImportFrom)
-                and (node.module or "").startswith("conda")
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+                "conda"
             ):
                 violations.append(f"{source_path.name}:{node.lineno}")
-            if (
-                source_path.name != "plugin.py"
-                and isinstance(node, ast.Import)
-                and any(alias.name.startswith("conda") for alias in node.names)
+            if isinstance(node, ast.Import) and any(
+                alias.name.startswith("conda") for alias in node.names
             ):
                 violations.append(f"{source_path.name}:{node.lineno}")
 

@@ -569,9 +569,7 @@ def test_inspect_completion_command_rejects_older_public_api(
     result = inspect_completion_command(())
 
     assert result["availability"] == "unavailable"
-    assert result["hint"] == (
-        "Use conda-completion 0.3 or newer in the target environment."
-    )
+    assert result["hint"] == ("Use conda-completion 0.3 or newer in this environment.")
 
 
 def test_module_entry_point_prints_catalog_json(

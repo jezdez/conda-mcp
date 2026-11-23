@@ -42,14 +42,14 @@ def test_capabilities_derive_and_round_trip_safe_catalog_metadata() -> None:
     program = make_program()
     plugin = make_plugin()
     capabilities = Capabilities(
-        target_executable="/opt/conda/bin/conda",
+        conda_executable="/opt/conda/bin/conda",
         program=program,
         plugins=(plugin,),
     )
 
     assert capabilities.generated_tools == ("conda_info",)
     assert capabilities.as_dict() == {
-        "target_executable": "/opt/conda/bin/conda",
+        "conda_executable": "/opt/conda/bin/conda",
         "conda_version": "26.7.1",
         "catalog": program.as_dict(),
         "generated_tools": ["conda_info"],

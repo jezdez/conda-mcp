@@ -37,7 +37,7 @@ Read-only conda commands are callable by default. Mutations need `--allow-write`
 
 `serve` always uses the installation that launched it, through `CONDA_EXE`. To expose a different installation, launch that installation's own `conda mcp serve`.
 
-The conda package installs a `conda-cli` declaration at `share/conda-mcp/servers/conda-cli.json`. `list` and `inspect` show it, and `register` writes a normal client entry that runs `conda mcp serve` from that prefix. A wheel install has no conda package record, so discovery does not advertise the declaration.
+The conda package installs a `conda-cli` declaration at `share/conda-mcp/servers/conda-cli.json`. `list` and `inspect` show it like any package-owned server. `register` writes the same entry shape it writes for every packaged server, and that entry runs the declared `conda mcp serve` from the prefix. A wheel install has no conda package record, so discovery does not advertise the declaration.
 
 ## Native destinations
 

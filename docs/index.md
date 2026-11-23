@@ -49,6 +49,7 @@ Understand trust, streams, receipts, and package changes.
 tutorials/first-server
 demos
 how-to/package-a-server
+how-to/migrate-from-conda-cli-mcp
 reference/commands
 reference/server-format
 explanation/lifecycle

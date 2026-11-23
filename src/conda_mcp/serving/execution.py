@@ -110,17 +110,14 @@ class CondaExecutor:
             raise ValueError("timeout_seconds must be finite and greater than zero")
         return min(timeout, self.timeout_seconds)
 
-    async def discover(
-        self,
-        *,
-        timeout_seconds: float | None = None,
-    ) -> Program:
+    async def discover(self) -> Program:
         """Discover the CLI catalog for this conda installation."""
         from .discovery import discover_program
 
         try:
             return discover_program()
-        except RuntimeError as error:
+        # ponytail: generate_parser runs every installed plugin's configure_parser.
+        except Exception as error:
             return Program(
                 prog=self.executable.name or "conda",
                 conda_version="unknown",
@@ -128,20 +125,7 @@ class CondaExecutor:
                 diagnostics=(Diagnostic(path=(), reason=str(error)[:512]),),
             )
 
-    async def discover_plugins(
-        self,
-        *,
-        timeout_seconds: float | None = None,
-    ) -> tuple[Plugin, ...]:
-        """Discover external conda plugin entry points in the target environment."""
-        _, plugins = await self.discover_plugin_state(timeout_seconds=timeout_seconds)
-        return plugins
-
-    async def discover_plugin_state(
-        self,
-        *,
-        timeout_seconds: float | None = None,
-    ) -> tuple[str, tuple[Plugin, ...]]:
+    async def discover_plugin_state(self) -> tuple[str, tuple[Plugin, ...]]:
         """Return this conda's version and external plugin entry points."""
         from .discovery import discover_plugins
 
@@ -150,8 +134,6 @@ class CondaExecutor:
     async def inspect_completion_command(
         self,
         command_path: Sequence[str] = (),
-        *,
-        timeout_seconds: float | None = None,
     ) -> dict[str, JsonValue]:
         """Query installed conda-completion metadata for one command."""
         from .discovery import inspect_completion_command

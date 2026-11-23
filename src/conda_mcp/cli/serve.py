@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from conda import CondaError
 from conda.exceptions import CondaValueError
 
 if TYPE_CHECKING:
@@ -23,6 +22,4 @@ def execute(args: Namespace) -> int:
         ) from None
     except ValueError as error:
         raise CondaValueError(str(error)) from error
-    except CondaError:
-        raise
     return 0

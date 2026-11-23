@@ -324,13 +324,15 @@ async def test_discover_live_conda_installation() -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("error", [RuntimeError, ValueError])
 async def test_discover_reports_parser_failure_without_raising(
     monkeypatch: pytest.MonkeyPatch,
+    error: type[Exception],
 ) -> None:
     import conda.cli.conda_argparse
 
     def explode():
-        raise RuntimeError("parser unavailable")
+        raise error("parser unavailable")
 
     monkeypatch.setattr(conda.cli.conda_argparse, "generate_parser", explode)
     executor = CondaExecutor(Path(sys.executable))

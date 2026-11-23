@@ -19,11 +19,11 @@ async def serve(
     executor: CondaExecutor,
     policy: SafetyPolicy = SafetyPolicy(),
 ) -> None:
-    """Discover the target conda CLI and serve it over standard I/O."""
+    """Discover this installation's CLI and serve it over standard I/O."""
     program = await executor.discover()
     try:
-        plugins = await executor.discover_plugins()
-    except RuntimeError as error:
+        _, plugins = await executor.discover_plugin_state()
+    except Exception as error:  # ponytail: installed plugin metadata is untrusted
         program = replace(
             program,
             diagnostics=(

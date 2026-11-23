@@ -34,7 +34,7 @@ The advantage is smaller for a single Python server already served well by a fra
 | Launch a selected packaged server | `conda mcp run SERVER` |
 | Expose a conda installation through MCP | `conda mcp serve` |
 
-Bare `conda mcp` displays help. The merged package does not install `ccm`, and the old bare-server invocation is not an alias for `serve`. Existing clients must use `conda mcp serve`, carrying over target selection, permission flags, limits, and environment references. The predecessor's plugin and the merged plugin must not be installed together in the same tools environment because both register `mcp`.
+Bare `conda mcp` displays help. The merged package does not install `ccm`, and the old bare-server invocation is not an alias for `serve`. Existing clients must use `conda mcp serve`, carrying over permission flags, limits, and environment references. The server always serves the installation that launched it, so there is no path override. The predecessor's plugin and the merged plugin must not be installed together in the same tools environment because both register `mcp`.
 
 [Conda-meta-mcp](https://github.com/conda-incubator/conda-meta-mcp) remains an independent server for ecosystem queries such as package search, import/file mappings, PyPI-to-conda mapping, CLI help, and dependency queries. It provides the standalone `cmm run` and `cmm mcp-json` commands, with no conda subcommand registration. Read-only metadata queries can contact services and use caches. They are different from conda-mcp's local installed-declaration scan, and conda-meta-mcp is not a dependency needed to use that scan or the CLI server.
 
@@ -108,7 +108,7 @@ The [official MCP Registry](https://modelcontextprotocol.io/registry/about) publ
 
 ### Native API reuse does not guarantee unlimited compatibility
 
-Conda activation wrappers, Windows executable search, and argparse discovery depend on behavior that can change between conda versions. The host conda running the plugin and a separately selected target conda are also distinct installations. Their supported ranges need separate compatibility evidence.
+Conda activation wrappers, Windows executable search, and argparse discovery depend on behavior that can change between conda versions, so the supported conda range needs explicit compatibility evidence.
 
 A lockfile solve does not prove a native launch works. Python-version coverage or Windows-targeted typing does not replace Windows execution. Conda-version and platform tests must cover activation noise and failure, environment state, protocol streams, cancellation, and child-process cleanup. Simplifying the launcher must preserve those behaviors.
 

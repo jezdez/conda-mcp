@@ -158,10 +158,10 @@ class CondaExecutor:
             windows_job: Any = None
             creation_flags = 0
             if os.name == "nt":
-                from .windows import CREATE_SUSPENDED, WindowsJob
+                from .windows import WindowsJob
 
                 windows_job = WindowsJob()
-                creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED
+                creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
             process_options: dict[str, Any] = (
                 {"creationflags": creation_flags}
                 if os.name == "nt"
@@ -182,7 +182,7 @@ class CondaExecutor:
                     **process_options,
                 )
                 if windows_job is not None:
-                    windows_job.assign_and_resume(process.pid)
+                    windows_job.assign(process.pid)
             except BaseException:
                 if process is not None and process.returncode is None:
                     with suppress(OSError):

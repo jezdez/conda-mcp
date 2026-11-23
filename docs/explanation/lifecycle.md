@@ -20,6 +20,8 @@ These controls keep activation output out of the protocol and bound normal proce
 
 ## Relationship to other tools
 
+See {doc}`prior-art` for the relationship to conda-cli-mcp, conda-meta-mcp, conda-global, and conda-exec, and the division between package management and MCP execution.
+
 [FastMCP](https://gofastmcp.com/docs/cli/install-mcp) generates client configuration and provides commands for live tool discovery and invocation. Conda-mcp renders entries from recorded package declarations instead of importing server code. The live demo uses FastMCP's existing client commands to exercise those entries.
 
 [Docker MCP Toolkit](https://docs.docker.com/ai/mcp-catalog-and-toolkit/cli/) separates packaged servers from client configuration through profiles and a gateway. Conda-mcp registers each server directly with the client and starts local servers in their conda environments. It does not add a gateway or profile store.

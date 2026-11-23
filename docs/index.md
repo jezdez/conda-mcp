@@ -69,6 +69,10 @@ The {ref}`registration recording <demo-registration>` includes the commands in t
 :::
 ::::
 
+## Prior art
+
+The {doc}`explanation/prior-art` compares conda-mcp with other MCP tools and conda ecosystem projects. It explains the merged CLI server, package-owned declarations, and the limits of activation, registration, and reproducibility.
+
 ```{toctree}
 :hidden:
 :caption: Tutorials
@@ -113,4 +117,5 @@ reference/glossary
 
 explanation/serving
 explanation/lifecycle
+explanation/prior-art
 ```

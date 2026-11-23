@@ -11,6 +11,7 @@
 | `unregister SERVER --client CLIENT` | No | Yes |
 | `registry` | No | No |
 | `run SERVER` | `-n NAME` or `-p PREFIX` | No |
+| `serve` | Its own installation | No |
 
 `render`, `register`, `unregister`, and `registry` use the current directory by default. `render` generates a native client snippet, not a portable environment export. `--global` selects a user configuration only for supported clients. Claude Code and Copilot share the project `.mcp.json` format. Claude Desktop accepts a global local-stdio registration only. Each client has its own approval and trust policy. Registration does not grant trust or permission to invoke tools.
 
@@ -19,6 +20,24 @@
 On Windows, launch metadata and arguments must fit within `cmd.exe`'s 8,191-character environment limit. Oversized payloads fail before activation starts.
 
 `--json` emits one JSON result for administrative commands. It does not wrap protocol streams from `run`.
+
+## Serve
+
+`conda mcp serve` exposes the conda installation that launched it over MCP on stdio. It reads that installation's command catalog and plugin metadata at startup, then serves until the client closes the stream. It is not a client command and it does not write client configuration.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--timeout SECONDS` | 900 | Upper bound for one conda command. |
+| `--output-limit-bytes BYTES` | 1048576 | Bytes retained per output stream. Later bytes are drained, not kept. |
+| `--stdin-limit-bytes BYTES` | 1048576 | Accepted UTF-8 input bytes. |
+| `--allow-write` | off | Enables conda operations that change environments or files. |
+| `--allow-exec` | off | Enables raw `conda_execute` and arbitrary argv execution. |
+
+Read-only conda commands are callable by default. Mutations need `--allow-write`, and raw execution needs `--allow-exec`. Enabling execution does not grant write permission. Server policy is fixed at startup and enforced on each call, independent of the annotations a client displays. The server excludes itself from the generated tool list, so a client cannot start another long-lived server through a generated tool.
+
+`serve` always uses the installation that launched it, through `CONDA_EXE`. To expose a different installation, launch that installation's own `conda mcp serve`.
+
+The conda package installs a `conda-cli` declaration at `share/conda-mcp/servers/conda-cli.json`. `list` and `inspect` show it, and `register` writes a normal client entry that runs `conda mcp serve` from that prefix. A wheel install has no conda package record, so discovery does not advertise the declaration.
 
 ## Native destinations
 

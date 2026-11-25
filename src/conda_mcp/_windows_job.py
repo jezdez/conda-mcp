@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import os
+import ctypes
 import sys
+from ctypes import wintypes
 from typing import Any
 
-_is_windows = os.name == "nt"
+from conda.common.compat import on_win
 
-if _is_windows:
+if on_win:
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _create_job = _kernel32.CreateJobObjectW
+    _create_job.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    _create_job.restype = wintypes.HANDLE
+    _close_handle = _kernel32.CloseHandle
+    _close_handle.argtypes = [wintypes.HANDLE]
+    _close_handle.restype = wintypes.BOOL
     try:
         import pywintypes
 
@@ -45,7 +53,7 @@ class WindowsJob:
     """Own an unnamed Windows job configured to kill its processes on close."""
 
     def __init__(self) -> None:
-        if not _is_windows:
+        if not on_win:
             raise RuntimeError("Windows job containment is only available on Windows.")
         if sys.getwindowsversion().major < 10:
             raise RuntimeError(
@@ -56,10 +64,19 @@ class WindowsJob:
                 "Windows job containment requires pywin32>=311. "
                 "Install conda-mcp on Windows with its declared dependencies."
             ) from _pywin32_error
+        # pywin32's CreateJobObject wrapper rejects a NULL name. Keep jobs unnamed.
+        raw_handle = _create_job(None, None)
+        if not raw_handle:
+            raise OSError(ctypes.get_last_error(), "CreateJobObjectW failed")
         try:
-            self._handle: Any | None = win32job.CreateJobObject(None, None)
-        except pywintypes.error as error:
-            raise _error("CreateJobObject", error) from error
+            self._handle: Any | None = pywintypes.HANDLE(raw_handle)
+        except BaseException as error:
+            try:
+                if not _close_handle(raw_handle):
+                    raise OSError(ctypes.get_last_error(), "CloseHandle failed")
+            except BaseException as cleanup:
+                error.add_note(_cleanup_note(cleanup))
+            raise
         operation = "QueryInformationJobObject"
         try:
             information = win32job.QueryInformationJobObject(

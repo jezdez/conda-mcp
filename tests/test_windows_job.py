@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from conda.common.compat import on_win
 
 from conda_mcp import _windows_job
 
@@ -107,7 +108,7 @@ class _Bindings:
 @pytest.fixture
 def bindings(monkeypatch: pytest.MonkeyPatch):
     value = _Bindings()
-    monkeypatch.setattr(_windows_job, "_is_windows", True)
+    monkeypatch.setattr(_windows_job, "on_win", True)
     monkeypatch.setattr(
         _windows_job.sys,
         "getwindowsversion",
@@ -117,7 +118,18 @@ def bindings(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         _windows_job,
         "pywintypes",
-        type("Types", (), {"error": _Pywin32Error}),
+        type(
+            "Types",
+            (),
+            {"error": _Pywin32Error, "HANDLE": staticmethod(lambda raw: raw)},
+        ),
+    )
+    monkeypatch.setattr(_windows_job, "_create_job", value.create, raising=False)
+    monkeypatch.setattr(
+        _windows_job,
+        "_close_handle",
+        lambda raw: value.close(raw) or True,
+        raising=False,
     )
     monkeypatch.setattr(
         _windows_job,
@@ -137,6 +149,54 @@ def bindings(monkeypatch: pytest.MonkeyPatch):
         ),
     )
     return value
+
+
+def test_job_creation_does_not_pass_null_name_through_pywin32(bindings, monkeypatch):
+    def reject_null_name(security, name):
+        raise TypeError("None is not a valid string in this context")
+
+    monkeypatch.setattr(_windows_job.win32job, "CreateJobObject", reject_null_name)
+    job = _windows_job.WindowsJob()
+    assert job.handle == 101
+    job.close()
+
+
+@pytest.mark.skipif(not on_win, reason="native Windows jobs")
+def test_native_jobs_are_distinct_and_non_inheritable():
+    import win32api
+    import win32con
+    import win32job
+
+    first = _windows_job.WindowsJob()
+    try:
+        second = _windows_job.WindowsJob()
+        try:
+            assert first.handle != second.handle
+            assert (
+                not win32api.GetHandleInformation(first.handle)
+                & win32con.HANDLE_FLAG_INHERIT
+            )
+            info = win32job.QueryInformationJobObject(
+                first.handle, win32job.JobObjectExtendedLimitInformation
+            )
+            info["BasicLimitInformation"]["LimitFlags"] |= (
+                win32job.JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+            )
+            info["BasicLimitInformation"]["ActiveProcessLimit"] = 1
+            win32job.SetInformationJobObject(
+                first.handle, win32job.JobObjectExtendedLimitInformation, info
+            )
+            other = win32job.QueryInformationJobObject(
+                second.handle, win32job.JobObjectExtendedLimitInformation
+            )
+            assert (
+                not other["BasicLimitInformation"]["LimitFlags"]
+                & win32job.JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+            )
+        finally:
+            second.close()
+    finally:
+        first.close()
 
 
 def test_windows_job_configures_kill_on_close_and_borrows_process_handle(
@@ -243,7 +303,7 @@ def test_query_interruption_closes_the_acquired_job(bindings: _Bindings) -> None
 def test_missing_pywin32_explains_how_to_enable_windows_containment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(_windows_job, "_is_windows", True)
+    monkeypatch.setattr(_windows_job, "on_win", True)
     monkeypatch.setattr(
         _windows_job.sys,
         "getwindowsversion",
@@ -297,13 +357,42 @@ def test_configuration_error_survives_system_exit_from_cleanup(
     assert "secret" not in error.value.__notes__[0]
 
 
-def test_create_failure_does_not_close_an_unowned_handle(bindings: _Bindings) -> None:
-    native = _Pywin32Error(5, "CreateJobObject", "access denied")
-    bindings.fail["CreateJobObject"] = native
+def test_create_failure_does_not_close_an_unowned_handle(bindings, monkeypatch) -> None:
+    monkeypatch.setattr(_windows_job, "_create_job", lambda *_: 0)
+    monkeypatch.setattr(_windows_job.ctypes, "get_last_error", lambda: 5, raising=False)
 
     with pytest.raises(OSError, match="CreateJobObject") as error:
         _windows_job.WindowsJob()
 
     assert error.value.errno == 5
-    assert error.value.__cause__ is native
     assert bindings.closed == []
+
+
+def test_handle_adoption_failure_closes_raw_job(bindings, monkeypatch):
+    error = MemoryError("handle allocation")
+
+    def fail(raw):
+        raise error
+
+    monkeypatch.setattr(_windows_job.pywintypes, "HANDLE", fail)
+    with pytest.raises(MemoryError) as caught:
+        _windows_job.WindowsJob()
+    assert caught.value is error
+    assert [int(handle) for handle in bindings.closed] == [101]
+
+
+def test_handle_adoption_failure_preserves_error_when_raw_close_fails(
+    bindings, monkeypatch
+):
+    error = MemoryError("handle allocation")
+
+    def fail(raw):
+        raise error
+
+    monkeypatch.setattr(_windows_job.pywintypes, "HANDLE", fail)
+    monkeypatch.setattr(_windows_job, "_close_handle", lambda raw: False)
+    monkeypatch.setattr(_windows_job.ctypes, "get_last_error", lambda: 6, raising=False)
+    with pytest.raises(MemoryError) as caught:
+        _windows_job.WindowsJob()
+    assert caught.value is error
+    assert error.__notes__ == ["CloseHandle cleanup failed: OSError: code=6"]

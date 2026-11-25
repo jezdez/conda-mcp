@@ -190,7 +190,9 @@ def enclosing() -> int:
     import win32api
     import win32job
 
-    job = win32job.CreateJobObject(None, None)
+    job = win32job.CreateJobObject(
+        None, os.environ["WINDOWS_TREE_READY"] + "-enclosing"
+    )
     limits = win32job.QueryInformationJobObject(
         job, win32job.JobObjectExtendedLimitInformation
     )

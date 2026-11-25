@@ -731,7 +731,7 @@ def test_launch_runs_a_named_fixture_with_a_contained_process(tmp_path):
         assert output.read_text(encoding="utf-8") == "in\n"
         assert os.read(reader, 3) == b"out"
         assert process._handle == 0
-        assert process._job == 0
+        assert process._job is None
     finally:
         process._conda_mcp_close_job()
         os.close(stdin)

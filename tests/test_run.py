@@ -455,8 +455,8 @@ def test_windows_activation_preserves_protocol_bytes_and_literal_arguments(
     hook = executable_server / "etc/conda/activate.d/noisy.bat"
     hook.parent.mkdir(parents=True)
     hook.write_text(
-        "@echo off\r\necho ACTIVATION STDOUT\r\necho ACTIVATION STDERR 1>&2\r\n"
-        "set /p ignored=\r\nset MCP_TEST_TOKEN=\r\n",
+        "@echo off\necho ACTIVATION STDOUT\necho ACTIVATION STDERR 1>&2\n"
+        'set /p ignored=\nset "MCP_TEST_TOKEN=activated"\nexit /b 0\n',
         encoding="utf-8",
     )
     protocol = b'{"literal": "snowman \\u2603"}\n'
@@ -487,3 +487,4 @@ def test_windows_activation_preserves_protocol_bytes_and_literal_arguments(
     )
     assert metadata.returncode == 0, metadata.stderr
     assert json.loads(metadata.stdout)["argv"] == arguments
+    assert json.loads(metadata.stdout)["token"] == "activated"

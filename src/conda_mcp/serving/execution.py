@@ -5,9 +5,9 @@ import codecs
 import json
 import math
 import os
-import shutil
 import signal
 import subprocess
+import sysconfig
 import time
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -83,12 +83,10 @@ class CondaExecutor:
     @classmethod
     def from_environment(cls, **kwargs: Any) -> CondaExecutor:
         """Resolve the conda that launched this process."""
-        executable = os.environ.get("CONDA_EXE") or shutil.which("conda")
-        if not executable:
-            raise FileNotFoundError(
-                "could not find conda. Set CONDA_EXE or add conda to PATH"
-            )
-        return cls(Path(executable), **kwargs)
+        executable = Path(sysconfig.get_path("scripts")) / (
+            "conda.exe" if on_win else "conda"
+        )
+        return cls(executable, **kwargs)
 
     async def execute(
         self,

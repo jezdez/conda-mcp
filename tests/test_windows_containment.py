@@ -489,6 +489,8 @@ def test_native_launch_excludes_unrelated_inheritable_sentinel_handle(
 
 @pytest.mark.parametrize("active_limit", [False, True])
 def test_native_launch_respects_enclosing_job_policy(windows_tree, active_limit):
+    import winerror
+
     tree = windows_tree(f"enclosing-{active_limit}")
     marker = Path(tree[5]) / "child-instructions-ran"
     owner = tree[8](
@@ -512,7 +514,7 @@ def test_native_launch_respects_enclosing_job_policy(windows_tree, active_limit)
             assert prelaunch["active_process_limit"] == 1
             assert result["error"] == "CondaError"
             assert result["cause"] == "OSError"
-            assert result["cause_winerror"] == 5
+            assert result["cause_winerror"] == winerror.ERROR_NOT_ENOUGH_QUOTA
             assert not (tree[5] / "root.json").exists()
             assert not marker.exists()
         else:

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
+import sys
 
 import anyio
 import pytest
@@ -13,11 +13,9 @@ from mcp.client.stdio import stdio_client
 
 @pytest.mark.anyio
 async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
-    conda = shutil.which("conda")
-    if conda is None:
-        pytest.skip("conda is not installed")
-
-    parameters = StdioServerParameters(command=conda, args=["mcp", "serve"])
+    parameters = StdioServerParameters(
+        command=sys.executable, args=["-I", "-m", "conda", "mcp", "serve"]
+    )
 
     with anyio.fail_after(300):
         async with (
@@ -38,12 +36,8 @@ async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
 
 
 def test_disabled_plugins_do_not_start_a_server() -> None:
-    conda = shutil.which("conda")
-    if conda is None:
-        pytest.skip("conda is not installed")
-
     completed = subprocess.run(
-        [conda, "--no-plugins", "mcp", "serve"],
+        [sys.executable, "-I", "-m", "conda", "--no-plugins", "mcp", "serve"],
         input=b"",
         capture_output=True,
         timeout=120,
@@ -51,3 +45,4 @@ def test_disabled_plugins_do_not_start_a_server() -> None:
 
     assert completed.returncode != 0
     assert b"jsonrpc" not in completed.stdout
+    assert b"invalid choice: 'mcp'" in completed.stderr

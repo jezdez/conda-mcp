@@ -774,6 +774,27 @@ def test_executor_rejects_batch_launchers(tmp_path: Path, suffix: str) -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("override", ["CONDA_EXE", "PATH"])
+async def test_executor_uses_discovered_installation_despite_ambient_conda(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, override: str
+) -> None:
+    if override == "CONDA_EXE":
+        monkeypatch.setenv("CONDA_EXE", sys.executable)
+    else:
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+        monkeypatch.setenv("PATH", str(tmp_path))
+
+    executor = CondaExecutor.from_environment(timeout_seconds=30)
+    program = await executor.discover()
+    result = await executor.execute(("info", "--json"))
+
+    assert result.exit_code == 0, result.stderr
+    assert isinstance(result.parsed_json, dict)
+    assert Path(result.parsed_json["conda_prefix"]).samefile(sys.prefix)
+    assert result.parsed_json["conda_version"] == program.conda_version
+
+
+@pytest.mark.anyio
 async def test_discover_live_conda_installation() -> None:
     try:
         executor = CondaExecutor.from_environment(timeout_seconds=30)

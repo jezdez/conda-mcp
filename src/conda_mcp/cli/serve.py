@@ -18,7 +18,7 @@ def execute(args: Namespace) -> int:
         serve_from_args(args)
     except FileNotFoundError:
         raise CondaValueError(
-            "could not find conda. Set CONDA_EXE or add conda to PATH"
+            "could not find conda in the launching Python environment"
         ) from None
     except ValueError as error:
         raise CondaValueError(str(error)) from error

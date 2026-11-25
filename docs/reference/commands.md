@@ -35,7 +35,7 @@ On Windows, `run` requires Windows 10 or Windows Server 2016 or newer and pywin3
 
 Read-only conda commands are callable by default. Mutations need `--allow-write`, and raw execution needs `--allow-exec`. Enabling execution does not grant write permission. Server policy is fixed at startup and enforced on each call, independent of the annotations a client displays. The server excludes itself from the generated tool list, so a client cannot start another long-lived server through a generated tool.
 
-`serve` always uses the installation that launched it, through `CONDA_EXE`. To expose a different installation, launch that installation's own `conda mcp serve`.
+`serve` resolves conda from the running interpreter's installation prefix. An inherited `CONDA_EXE` or a different conda on `PATH` does not change which installation it serves. To expose a different installation, launch that installation's own `conda mcp serve`.
 
 On Windows, command execution through `serve` has the same operating-system and pywin32 requirements as `run`. Commands start suspended, are assigned to a Job Object, then resume. Output draining continues until EOF or the command timeout, including when a descendant holds a pipe open after the root exits. See [Lifecycle and safety](../explanation/lifecycle.md) for cleanup behavior and the remaining owner-death limitation during suspended creation.
 

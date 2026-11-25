@@ -5,11 +5,133 @@ import os
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
+import anyio
 import pytest
 
 from conda_mcp.serving.execution import CompletionQueryError, CondaExecutor
+
+
+class _WindowsProcess:
+    def __init__(
+        self,
+        events: list[str],
+        *,
+        reap: bool = True,
+        returncode: int | None = None,
+        kill_error: BaseException | None = None,
+        wait_error: BaseException | None = None,
+        wait_error_on_cancel: BaseException | None = None,
+        suppress_wait_cancellation: bool = False,
+    ) -> None:
+        self.events = events
+        self.pid = 123
+        self.returncode = returncode
+        self.kill_error = kill_error
+        self.wait_error = wait_error
+        self.wait_error_on_cancel = wait_error_on_cancel
+        self.suppress_wait_cancellation = suppress_wait_cancellation
+        self.stdin = None
+        self.stdout = asyncio.StreamReader()
+        self.stderr = asyncio.StreamReader()
+        self._reap = asyncio.Event()
+        self.wait_cancelled = False
+        if reap:
+            self._reap.set()
+
+    async def wait(self) -> int:
+        self.events.append("wait")
+        try:
+            await self._reap.wait()
+        except asyncio.CancelledError:
+            self.wait_cancelled = True
+            if self.wait_error_on_cancel is not None:
+                raise self.wait_error_on_cancel
+            if not self.suppress_wait_cancellation:
+                raise
+            await self._reap.wait()
+        if self.wait_error is not None:
+            raise self.wait_error
+        self.returncode = 0
+        return 0
+
+    def kill(self) -> None:
+        self.events.append("kill")
+        if self.kill_error is not None:
+            raise self.kill_error
+        self._reap.set()
+
+
+class _WindowsJob:
+    def __init__(
+        self,
+        events: list[str],
+        *,
+        assign_error: BaseException | None = None,
+        terminate_error: BaseException | None = None,
+        close_error: BaseException | None = None,
+    ) -> None:
+        self.events = events
+        self.assign_error = assign_error
+        self.terminate_error = terminate_error
+        self.close_error = close_error
+
+    def assign_and_resume(self, pid: int) -> None:
+        self.events.append(f"assign:{pid}")
+        if self.assign_error is not None:
+            raise self.assign_error
+
+    def terminate(self) -> None:
+        self.events.append("terminate")
+        if self.terminate_error is not None:
+            raise self.terminate_error
+
+    def close(self) -> None:
+        self.events.append("close")
+        if self.close_error is not None:
+            raise self.close_error
+
+
+def _windows_executor(tmp_path: Path) -> CondaExecutor:
+    executable = tmp_path / "conda.exe"
+    executable.touch()
+    return CondaExecutor(
+        executable, timeout_seconds=0.01, termination_grace_seconds=0.001
+    )
+
+
+def _install_windows_fakes(
+    monkeypatch: pytest.MonkeyPatch,
+    process: _WindowsProcess,
+    job: _WindowsJob,
+) -> None:
+    import conda_mcp.serving.execution as execution
+    import conda_mcp.serving.windows as windows
+
+    monkeypatch.setattr(
+        execution,
+        "os",
+        SimpleNamespace(name="nt", kill=lambda *_: None),
+    )
+    monkeypatch.setattr(
+        execution,
+        "signal",
+        SimpleNamespace(CTRL_BREAK_EVENT=1, SIGTERM=1, SIGKILL=2),
+    )
+    monkeypatch.setattr(
+        execution,
+        "subprocess",
+        SimpleNamespace(CREATE_NEW_PROCESS_GROUP=1),
+    )
+    monkeypatch.setattr(windows, "WindowsJob", lambda: job)
+
+    async def create_process(*_args: object, **_kwargs: object) -> _WindowsProcess:
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create_process)
+
 
 if TYPE_CHECKING:
     pass
@@ -237,6 +359,349 @@ async def test_execute_cancellation_bounds_inherited_pipe_drain(
     await asyncio.sleep(0.55)
 
     assert not survived.exists()
+
+
+@pytest.mark.anyio
+async def test_windows_assignment_failure_terminates_job_before_reaping_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events)
+    job = _WindowsJob(events, assign_error=OSError("assignment failed"))
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError, match="assignment failed"):
+        await _windows_executor(tmp_path).execute(())
+
+    assert events == ["assign:123", "terminate", "kill", "close", "wait"]
+
+
+@pytest.mark.anyio
+async def test_windows_assignment_failure_preserves_primary_error_when_close_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events)
+    job = _WindowsJob(
+        events,
+        assign_error=OSError("assignment failed"),
+        close_error=OSError("close failed"),
+    )
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError, match="assignment failed"):
+        await _windows_executor(tmp_path).execute(())
+
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_cancellation_closes_job_when_teardown_cannot_reap(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import conda_mcp.serving.execution as execution
+
+    monkeypatch.setattr(execution, "_WINDOWS_CLEANUP_SECONDS", 0.01)
+    events: list[str] = []
+    process = _WindowsProcess(events, reap=False)
+    process.stdout.feed_eof()
+    process.stderr.feed_eof()
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+    execution_task = asyncio.create_task(_windows_executor(tmp_path).execute(()))
+
+    await asyncio.sleep(0)
+    execution_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await execution_task
+
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_launch_close_failure_propagates_without_primary_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events)
+    process.stdout.feed_eof()
+    process.stderr.feed_eof()
+    job = _WindowsJob(events, close_error=SystemExit("close failed"))
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(SystemExit, match="close failed"):
+        await _windows_executor(tmp_path).execute(())
+
+
+@pytest.mark.anyio
+async def test_windows_assignment_failure_closes_job_after_kill_control_flow_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events, kill_error=SystemExit("kill failed"))
+    job = _WindowsJob(events, assign_error=OSError("assignment failed"))
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError, match="assignment failed"):
+        await _windows_executor(tmp_path).execute(())
+
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_timeout_terminates_job_after_root_has_exited(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events, returncode=0)
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+
+    result = await _windows_executor(tmp_path).execute(())
+
+    assert result.timed_out
+    assert events == ["assign:123", "wait", "terminate", "close"]
+
+
+@pytest.mark.anyio
+async def test_windows_terminate_failure_still_reaps_and_closes_with_one_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import conda_mcp.serving.execution as execution
+
+    monkeypatch.setattr(execution, "_WINDOWS_CLEANUP_SECONDS", 0.01)
+    events: list[str] = []
+    process = _WindowsProcess(events, reap=False)
+    job = _WindowsJob(events, terminate_error=OSError("terminate failed"))
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError, match="terminate failed"):
+        await _windows_executor(tmp_path).execute(())
+
+    assert events[:3] == ["assign:123", "wait", "terminate"]
+    assert "close" in events
+    assert process.wait_cancelled
+
+
+@pytest.mark.anyio
+async def test_windows_cancellation_during_creation_closes_unassigned_job(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, _WindowsProcess(events), job)
+    started = asyncio.Event()
+
+    async def creating(*_args: object, **_kwargs: object) -> _WindowsProcess:
+        started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", creating)
+    task = asyncio.create_task(_windows_executor(tmp_path).execute(()))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert events == ["close"]
+
+
+@pytest.mark.anyio
+async def test_windows_anyio_cancellation_closes_job(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events, reap=False)
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with anyio.move_on_after(0.01):
+        await _windows_executor(tmp_path).execute(())
+
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_repeated_asyncio_cancellation_waits_for_owned_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import conda_mcp.serving.execution as execution
+
+    monkeypatch.setattr(execution, "_WINDOWS_CLEANUP_SECONDS", 0.01)
+    events: list[str] = []
+    process = _WindowsProcess(events, reap=False)
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+    task = asyncio.create_task(_windows_executor(tmp_path).execute(()))
+
+    await asyncio.sleep(0)
+    task.cancel()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert process.wait_cancelled
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_assignment_cleanup_is_bounded_when_wait_ignores_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import conda_mcp.serving.execution as execution
+
+    monkeypatch.setattr(execution, "_WINDOWS_CLEANUP_SECONDS", 0.01)
+    events: list[str] = []
+    process = _WindowsProcess(
+        events,
+        reap=False,
+        kill_error=OSError("kill failed"),
+        suppress_wait_cancellation=True,
+    )
+    job = _WindowsJob(events, assign_error=OSError("assignment failed"))
+    _install_windows_fakes(monkeypatch, process, job)
+
+    execution_task = asyncio.create_task(_windows_executor(tmp_path).execute(()))
+    done, _ = await asyncio.wait({execution_task}, timeout=0.1)
+    process._reap.set()
+    await asyncio.sleep(0)
+
+    assert execution_task in done
+    with pytest.raises(OSError, match="assignment failed"):
+        await execution_task
+    assert process.wait_cancelled
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_timeout_does_not_return_success_when_reap_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events, wait_error=OSError(91, "wait failed"))
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError) as raised:
+        await _windows_executor(tmp_path).execute(())
+
+    assert raised.value.errno == 91
+    assert "terminate" in events
+    assert "close" in events
+
+
+@pytest.mark.anyio
+async def test_windows_assignment_failure_notes_reap_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events, wait_error=OSError(92, "wait failed"))
+    job = _WindowsJob(events, assign_error=OSError("assignment failed"))
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError, match="assignment failed") as raised:
+        await _windows_executor(tmp_path).execute(())
+
+    assert raised.value.__notes__ == ["Windows executor cleanup reap: OSError code=92"]
+
+
+@pytest.mark.anyio
+async def test_windows_graceful_wait_failure_still_forces_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(
+        events,
+        reap=False,
+        wait_error_on_cancel=OSError(93, "wait failed"),
+    )
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+
+    with pytest.raises(OSError) as raised:
+        await _windows_executor(tmp_path).execute(())
+
+    assert raised.value.errno == 93
+    assert "terminate" in events
+    assert "close" in events
+    assert process.wait_cancelled
+
+
+@pytest.mark.anyio
+async def test_windows_grace_failure_preserves_deadline_and_collects_streams(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    process = _WindowsProcess(events, reap=False)
+    failure = OSError(94, "private wait detail")
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+
+    async def failed_wait():
+        await asyncio.sleep(0.015)
+        raise failure
+
+    monkeypatch.setattr(process, "wait", failed_wait)
+    executor = CondaExecutor(
+        _windows_executor(tmp_path).executable,
+        timeout_seconds=0.01,
+        termination_grace_seconds=0.1,
+    )
+    with pytest.raises(OSError) as raised:
+        await executor.execute(())
+
+    assert raised.value is failure
+    assert "terminate" in events and "close" in events
+    assert not any(
+        "AssertionError" in note for note in getattr(failure, "__notes__", ())
+    )
+    assert not any(
+        not task.done()
+        and task is not asyncio.current_task()
+        and "capture" in task.get_coro().__qualname__
+        for task in asyncio.all_tasks()
+    )
+
+
+@pytest.mark.anyio
+async def test_windows_cleanup_preserves_first_direct_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import conda_mcp.serving.execution as execution
+
+    monkeypatch.setattr(execution, "_WINDOWS_CLEANUP_SECONDS", 0.05)
+    events: list[str] = []
+    process = _WindowsProcess(events, reap=False)
+    job = _WindowsJob(events)
+    _install_windows_fakes(monkeypatch, process, job)
+    task = asyncio.create_task(_windows_executor(tmp_path).execute(()))
+
+    await asyncio.sleep(0)
+    task.cancel("first cancellation")
+    await asyncio.sleep(0)
+    task.cancel("second cancellation")
+    with pytest.raises(asyncio.CancelledError) as raised:
+        await task
+
+    assert raised.value.args == ("first cancellation",)
+    assert process.wait_cancelled
 
 
 @pytest.mark.anyio

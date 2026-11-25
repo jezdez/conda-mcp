@@ -33,6 +33,19 @@ class CompletionQueryError(RuntimeError):
         self.code = code
 
 
+_WINDOWS_CLEANUP_SECONDS = 5
+
+
+def _add_cleanup_note(error: BaseException, operation: str, detail: object) -> None:
+    note = f"Windows executor cleanup {operation}: {type(detail).__name__}"
+    code = getattr(detail, "winerror", None)
+    if not isinstance(code, int):
+        code = getattr(detail, "errno", None)
+    if isinstance(code, int):
+        note += f" code={code}"
+    error.add_note(note)
+
+
 @dataclass(slots=True)
 class CondaExecutor:
     """Run commands against one explicitly resolved conda executable."""
@@ -156,6 +169,7 @@ class CondaExecutor:
         async with self._lock:
             started = time.monotonic()
             windows_job: Any = None
+            windows_job_closed = False
             creation_flags = 0
             if os.name == "nt":
                 from .windows import CREATE_SUSPENDED, WindowsJob
@@ -168,6 +182,69 @@ class CondaExecutor:
                 else {"start_new_session": True}
             )
             process = None
+
+            async def collect_windows_tasks(
+                tasks: tuple[asyncio.Task[Any], ...], deadline: float
+            ) -> BaseException | None:
+                done, pending = await asyncio.wait(
+                    tasks, timeout=max(0, deadline - time.monotonic())
+                )
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    done_after_cancel, pending = await asyncio.wait(
+                        pending, timeout=max(0, deadline - time.monotonic())
+                    )
+                    done |= done_after_cancel
+                task_error = None
+                for task in done:
+                    if task.cancelled():
+                        continue
+                    try:
+                        task.result()
+                    except asyncio.CancelledError:
+                        continue
+                    except BaseException as error:
+                        if task_error is None:
+                            task_error = error
+                        elif task_error is not error:
+                            _add_cleanup_note(task_error, "collect", error)
+                if pending:
+                    for task in pending:
+                        task.add_done_callback(
+                            lambda done_task: (
+                                None if done_task.cancelled() else done_task.exception()
+                            )
+                        )
+                    timeout_error = RuntimeError("Windows executor cleanup timed out")
+                    if task_error is not None:
+                        _add_cleanup_note(task_error, "collect", timeout_error)
+                        return task_error
+                    return timeout_error
+                return task_error
+
+            async def await_windows_cleanup(
+                cleanup_task: asyncio.Task[None],
+            ) -> None:
+                cancellation_error: asyncio.CancelledError | None = None
+                while True:
+                    try:
+                        await asyncio.shield(cleanup_task)
+                    except asyncio.CancelledError as error:
+                        if cancellation_error is None:
+                            cancellation_error = error
+                        if cleanup_task.done():
+                            raise cancellation_error
+                        continue
+                    except BaseException as error:
+                        if cancellation_error is not None:
+                            _add_cleanup_note(cancellation_error, "collect", error)
+                            raise cancellation_error
+                        raise
+                    if cancellation_error is not None:
+                        raise cancellation_error
+                    return
+
             try:
                 process = await asyncio.create_subprocess_exec(
                     *command,
@@ -183,13 +260,69 @@ class CondaExecutor:
                 )
                 if windows_job is not None:
                     windows_job.assign_and_resume(process.pid)
-            except BaseException:
-                if process is not None and process.returncode is None:
-                    with suppress(OSError):
-                        process.kill()
-                    await process.wait()
+            except BaseException as error:
                 if windows_job is not None:
-                    windows_job.close()
+                    try:
+                        if process is not None:
+                            deadline = time.monotonic() + _WINDOWS_CLEANUP_SECONDS
+
+                            async def cleanup_launch_failure(
+                                primary_error: BaseException = error,
+                            ) -> None:
+                                nonlocal windows_job_closed
+                                try:
+                                    try:
+                                        windows_job.terminate()
+                                    except BaseException as cleanup_error:
+                                        _add_cleanup_note(
+                                            primary_error, "terminate", cleanup_error
+                                        )
+                                    try:
+                                        process.kill()
+                                    except BaseException as cleanup_error:
+                                        _add_cleanup_note(
+                                            primary_error, "kill", cleanup_error
+                                        )
+                                    try:
+                                        windows_job.close()
+                                        windows_job_closed = True
+                                    except BaseException as cleanup_error:
+                                        _add_cleanup_note(
+                                            primary_error, "close", cleanup_error
+                                        )
+                                    reaper = asyncio.create_task(process.wait())
+                                    cleanup_error = await collect_windows_tasks(
+                                        (reaper,), deadline
+                                    )
+                                    if cleanup_error is not None:
+                                        _add_cleanup_note(
+                                            primary_error, "reap", cleanup_error
+                                        )
+                                finally:
+                                    if not windows_job_closed:
+                                        try:
+                                            windows_job.close()
+                                            windows_job_closed = True
+                                        except BaseException as cleanup_error:
+                                            _add_cleanup_note(
+                                                primary_error, "close", cleanup_error
+                                            )
+
+                            try:
+                                cleanup_task = asyncio.create_task(
+                                    cleanup_launch_failure()
+                                )
+                                with anyio.CancelScope(shield=True):
+                                    await await_windows_cleanup(cleanup_task)
+                            except BaseException as cleanup_error:
+                                _add_cleanup_note(error, "reap", cleanup_error)
+                    finally:
+                        if not windows_job_closed:
+                            try:
+                                windows_job.close()
+                                windows_job_closed = True
+                            except BaseException as cleanup_error:
+                                _add_cleanup_note(error, "close", cleanup_error)
                 raise
             assert process.stdout is not None
             assert process.stderr is not None
@@ -230,13 +363,15 @@ class CondaExecutor:
             wait_task = asyncio.create_task(process.wait())
             tasks = (wait_task, stdout_task, stderr_task, input_task)
 
-            async def stop_process() -> None:
+            async def stop_process() -> tuple[float | None, BaseException | None]:
+                nonlocal windows_job_closed
                 if os.name == "nt":
                     with suppress(OSError):
                         os.kill(process.pid, signal.CTRL_BREAK_EVENT)
                 else:
                     with suppress(OSError):
                         os.killpg(process.pid, signal.SIGTERM)
+                graceful_error = None
                 try:
                     if not wait_task.done():
                         await asyncio.wait_for(
@@ -245,43 +380,114 @@ class CondaExecutor:
                         )
                 except TimeoutError:
                     pass
+                except BaseException as error:
+                    graceful_error = error
 
                 if os.name == "nt":
+                    deadline = time.monotonic() + _WINDOWS_CLEANUP_SECONDS
                     assert windows_job is not None
-                    windows_job.terminate()
+                    termination_error = graceful_error
+                    try:
+                        windows_job.terminate()
+                    except BaseException as error:
+                        if termination_error is None:
+                            termination_error = error
+                        else:
+                            _add_cleanup_note(termination_error, "terminate", error)
+                    try:
+                        windows_job.close()
+                        windows_job_closed = True
+                    except BaseException as error:
+                        if termination_error is None:
+                            termination_error = error
+                        else:
+                            _add_cleanup_note(termination_error, "close", error)
                 else:
                     with suppress(OSError):
                         os.killpg(process.pid, signal.SIGKILL)
-                if not wait_task.done():
-                    await wait_task
+                if os.name != "nt":
+                    if not wait_task.done():
+                        await wait_task
+                    if graceful_error is not None:
+                        raise graceful_error
+                return (
+                    deadline if os.name == "nt" else None,
+                    termination_error if os.name == "nt" else None,
+                )
+
+            async def cancel_and_cleanup() -> None:
+                primary_error = None
+                deadline = None
+                try:
+                    deadline, primary_error = await stop_process()
+                except BaseException as error:
+                    primary_error = error
+                for task in (stdout_task, stderr_task, input_task):
+                    if not task.done():
+                        task.cancel()
+                try:
+                    if os.name == "nt":
+                        assert deadline is not None
+                        cleanup_error = await collect_windows_tasks(tasks, deadline)
+                        if cleanup_error is not None:
+                            raise cleanup_error
+                    else:
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                except BaseException as error:
+                    if primary_error is None:
+                        primary_error = error
+                    else:
+                        _add_cleanup_note(primary_error, "collect", error)
+                if primary_error is not None:
+                    raise primary_error
 
             timed_out = False
+            runtime_error: BaseException | None = None
+            cleanup_task: asyncio.Task[None] | None = None
+
+            async def cleanup_once() -> None:
+                nonlocal cleanup_task
+                if cleanup_task is None:
+                    cleanup_task = asyncio.create_task(cancel_and_cleanup())
+                await await_windows_cleanup(cleanup_task)
+
             try:
                 _, pending = await asyncio.wait(tasks, timeout=timeout)
                 if pending:
                     timed_out = True
-                    with anyio.CancelScope(shield=True):
-                        await stop_process()
-                        for task in (stdout_task, stderr_task, input_task):
-                            if not task.done():
-                                task.cancel()
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                    if os.name == "nt":
+                        with anyio.CancelScope(shield=True):
+                            await cleanup_once()
+                    else:
+                        with anyio.CancelScope(shield=True):
+                            await cancel_and_cleanup()
                 stdout_result, stderr_result, _ = await asyncio.gather(
                     stdout_task,
                     stderr_task,
                     input_task,
                 )
-            except asyncio.CancelledError:
-                with anyio.CancelScope(shield=True):
-                    await stop_process()
-                    for task in (stdout_task, stderr_task, input_task):
-                        if not task.done():
-                            task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
+            except BaseException as primary_error:
+                runtime_error = primary_error
+                try:
+                    if os.name == "nt":
+                        with anyio.CancelScope(shield=True):
+                            await cleanup_once()
+                    else:
+                        with anyio.CancelScope(shield=True):
+                            await cancel_and_cleanup()
+                except BaseException as cleanup_error:
+                    # Cancellation remains the primary error, so cleanup failures
+                    # are only retained as diagnostics on the active exception.
+                    _add_cleanup_note(primary_error, "collect", cleanup_error)
                 raise
             finally:
-                if windows_job is not None:
-                    windows_job.close()
+                if windows_job is not None and not windows_job_closed:
+                    try:
+                        windows_job.close()
+                    except BaseException as close_error:
+                        if runtime_error is None:
+                            raise
+                        _add_cleanup_note(runtime_error, "close", close_error)
 
         stdout, stdout_truncated = stdout_result
         stderr, stderr_truncated = stderr_result

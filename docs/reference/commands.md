@@ -17,7 +17,7 @@
 
 `--package PACKAGE` on `run` requires exact equality with the normalized name of the package owning the manifest. It is not a MatchSpec and does not identify the executable's dependency package. Put extra literal server arguments after `--`, for example `conda mcp run -n servers example -- --verbose`.
 
-On Windows, launch metadata and arguments must fit within `cmd.exe`'s 8,191-character environment limit. Oversized payloads fail before activation starts.
+On Windows, `run` requires Windows 10 or Windows Server 2016 or newer and pywin32 >=311. Launch metadata and arguments must fit within `cmd.exe`'s 8,191-character environment limit. Oversized payloads fail before activation starts. The activation wrapper is assigned to its Job Object during process creation. Unsupported containment fails without an uncontained fallback.
 
 `--json` emits one JSON result for administrative commands. It does not wrap protocol streams from `run`.
 
@@ -36,6 +36,8 @@ On Windows, launch metadata and arguments must fit within `cmd.exe`'s 8,191-char
 Read-only conda commands are callable by default. Mutations need `--allow-write`, and raw execution needs `--allow-exec`. Enabling execution does not grant write permission. Server policy is fixed at startup and enforced on each call, independent of the annotations a client displays. The server excludes itself from the generated tool list, so a client cannot start another long-lived server through a generated tool.
 
 `serve` always uses the installation that launched it, through `CONDA_EXE`. To expose a different installation, launch that installation's own `conda mcp serve`.
+
+On Windows, command execution through `serve` has the same operating-system and pywin32 requirements as `run`. Commands start suspended, are assigned to a Job Object, then resume. Output draining continues until EOF or the command timeout, including when a descendant holds a pipe open after the root exits. See [Lifecycle and safety](../explanation/lifecycle.md) for cleanup behavior and the remaining owner-death limitation during suspended creation.
 
 The conda package installs a `conda-cli` declaration at `share/conda-mcp/servers/conda-cli.json`. `list` and `inspect` show it like any package-owned server. `register` writes the same entry shape it writes for every packaged server, and that entry runs the declared `conda mcp serve` from the prefix. A wheel install has no conda package record, so discovery does not advertise the declaration.
 

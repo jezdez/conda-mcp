@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,7 @@ import tarfile
 import zipfile
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -53,6 +55,44 @@ def test_distribution_validation_rejects_a_wheel_with_a_bad_crc(tmp_path: Path) 
         raise AssertionError("A wheel with a bad CRC was accepted.")
 
 
+@pytest.mark.parametrize("quote", ["'", '"'])
+def test_distribution_validation_accepts_equivalent_windows_markers(
+    tmp_path: Path, quote: str
+) -> None:
+    """Marker quote style must not change the wheel's dependency meaning."""
+    check_dist = _script_module("check_dist")
+    metadata = "Name: conda-mcp\nVersion: 1.0.0\nRequires-Python: >=3.11\n"
+    for requirement in (
+        "anyio>=4.9",
+        "jsonschema>=4.20",
+        "mcp<3,>=2",
+        "rich>=13",
+        "tomlkit>=0.13",
+        f"pywin32>=311; sys_platform == {quote}win32{quote}",
+    ):
+        metadata += f"Requires-Dist: {requirement}\n"
+    wheel = tmp_path / "conda_mcp-1.0.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("conda_mcp-1.0.0.dist-info/METADATA", metadata)
+        archive.writestr(
+            "conda_mcp-1.0.0.dist-info/entry_points.txt",
+            "[conda]\nconda-mcp = conda_mcp.plugin\n",
+        )
+        archive.writestr("conda_mcp/schema/server-v1.json", "{}")
+    source = tmp_path / "conda_mcp-1.0.0"
+    source.mkdir()
+    (source / "PKG-INFO").write_text(metadata)
+    for path in check_dist.REQUIRED_SDIST_PATHS:
+        target = source / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.touch()
+    sdist = tmp_path / "conda_mcp-1.0.0.tar.gz"
+    with tarfile.open(sdist, "w:gz") as archive:
+        archive.add(source, arcname=source.name)
+
+    check_dist.DistributionArtifacts(wheel, sdist).validate()
+
+
 def test_wheel_script_creates_an_isolated_conda_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -92,13 +132,16 @@ def test_wheel_script_creates_an_isolated_conda_environment(
     create, install, smoke = calls
     assert create[0][:5] == [str(test_wheel.HOST), "-I", "-m", "conda", "create"]
     assert "--override-channels" in create[0]
-    assert create[0][-5:] == [
+    expected_dependencies = [
         "conda>=26.10",
         "python>=3.11",
         "rich>=13",
         "tomlkit>=0.13",
-        "pip",
     ]
+    if os.name == "nt":
+        expected_dependencies.append("pywin32>=311")
+    expected_dependencies.append("pip")
+    assert create[0][-len(expected_dependencies) :] == expected_dependencies
     assert create[1]["CONDARC"].endswith("condarc")
     assert create[1]["CONDA_ENVS_PATH"].endswith("envs")
     assert install[0][2:7] == [
@@ -109,6 +152,19 @@ def test_wheel_script_creates_an_isolated_conda_environment(
         str(wheel.resolve()),
     ]
     assert smoke[0][-2:] == ["--expected-version", "1.2.3"]
+
+
+@pytest.mark.parametrize("platform", ["nt", "posix"])
+def test_wheel_script_provisions_pywin32_only_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+    platform: str,
+) -> None:
+    """Windows wheel smoke environments include the native containment dependency."""
+    test_wheel = _script_module("test_wheel")
+
+    monkeypatch.setattr(test_wheel, "os", SimpleNamespace(name=platform))
+
+    assert ("pywin32>=311" in test_wheel._runtime_dependencies()) == (platform == "nt")
 
 
 def test_example_script_passes_an_isolated_rattler_cache_to_builders(

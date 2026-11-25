@@ -8,12 +8,27 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from packaging.requirements import Requirement
+
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRES = {"anyio>=4.9", "jsonschema>=4.20", "mcp<3,>=2", "rich>=13", "tomlkit>=0.13"}
+REQUIRES = {
+    "anyio>=4.9",
+    "jsonschema>=4.20",
+    "mcp<3,>=2",
+    'pywin32>=311;sys_platform=="win32"',
+    "rich>=13",
+    "tomlkit>=0.13",
+}
 REQUIRED_SDIST_PATHS = {
     "src/conda_mcp/schema/server-v1.json",
+    "src/conda_mcp/_windows_job.py",
     "tests/conftest.py",
     "tests/fixtures/windows_launch_wrapper.py",
+    "tests/fixtures/windows_process_tree.py",
+    "tests/serving/test_windows.py",
+    "tests/test_run_windows.py",
+    "tests/test_windows_containment.py",
+    "tests/test_windows_job.py",
     "scripts/check_dist.py",
     "scripts/smoke_plugin.py",
     "scripts/test_wheel.py",
@@ -66,7 +81,7 @@ class DistributionArtifacts:
             assert version
             assert self.wheel.name.startswith(f"conda_mcp-{version}-")
             requires = {
-                requirement.replace(" ", "")
+                str(Requirement(requirement)).replace(" ", "")
                 for requirement in metadata.get_all("Requires-Dist", [])
             }
             assert metadata["Name"] == "conda-mcp"

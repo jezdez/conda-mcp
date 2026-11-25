@@ -7,6 +7,7 @@ from dataclasses import asdict
 from types import SimpleNamespace
 
 import pytest
+from conda.common.compat import on_win
 
 from conda_mcp import _launch
 from conda_mcp.run import LaunchPayload
@@ -66,7 +67,7 @@ def test_payload_handles_windows_raw_handles_without_treating_them_as_fds(payloa
 
 
 def test_launch_payload_owns_activated_revalidation(install_package, monkeypatch):
-    relative = "Scripts/example.exe" if os.name == "nt" else "bin/example"
+    relative = "Scripts/example.exe" if on_win else "bin/example"
     prefix = install_package(
         manifest={
             "schema_version": 1,
@@ -127,6 +128,7 @@ def test_windows_trampoline_waits_for_server_instead_of_exec_overlay(
             execve=lambda *args: calls.append("incorrect overlay"),
         ),
     )
+    monkeypatch.setattr(_launch, "on_win", True)
 
     def run(arguments, **kwargs):
         calls.append((arguments, kwargs))

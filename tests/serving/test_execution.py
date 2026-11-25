@@ -115,6 +115,7 @@ def _install_windows_fakes(
         "os",
         SimpleNamespace(name="nt", kill=lambda *_: None),
     )
+    monkeypatch.setattr(execution, "on_win", True)
     monkeypatch.setattr(
         execution,
         "signal",

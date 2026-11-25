@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import stat
 from dataclasses import dataclass
@@ -329,9 +328,7 @@ class Server:
                     ):
                         continue
                     mode = resolved.stat().st_mode
-                    if stat.S_ISREG(mode) and (
-                        os.name == "nt" or bool(mode & stat.S_IXUSR)
-                    ):
+                    if stat.S_ISREG(mode) and (on_win or bool(mode & stat.S_IXUSR)):
                         return candidate
                 except (OSError, ValueError):
                     continue

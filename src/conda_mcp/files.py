@@ -12,7 +12,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import BinaryIO
 
-if os.name == "nt":
+from conda.common.compat import on_win
+
+if on_win:
     import ctypes
     import msvcrt
     from ctypes import wintypes
@@ -93,7 +95,7 @@ def read_bytes(
     """Read one bounded regular file without following redirected components."""
     if limit < 0:
         raise ValueError("size limit must be non-negative")
-    if os.name == "nt":
+    if on_win:
         return _read_windows(path, limit, missing_ok)
     try:
         parent, name, bindings = _open_parent(path)
@@ -129,7 +131,7 @@ def atomic_write(
     """Atomically replace a file when its current bytes still equal expected."""
     if len(data) > limit or expected is not None and len(expected) > limit:
         raise ValueError("File exceeds size limit.")
-    if os.name == "nt":
+    if on_win:
         _atomic_write_windows(path, data, expected, limit)
         return
     parent, name, bindings = _open_parent(path)
@@ -143,7 +145,7 @@ def atomic_write(
 def open_lock(path: Path) -> Generator[BinaryIO]:
     """Open a private binary regular lock file without replacing its inode."""
     parents: list[int] = []
-    if os.name == "nt":
+    if on_win:
         try:
             parents = _open_windows_parents(path, create=True)
             descriptor = _windows_fd(path, _GENERIC_READ | _GENERIC_WRITE, _OPEN_ALWAYS)
@@ -167,11 +169,11 @@ def open_lock(path: Path) -> Generator[BinaryIO]:
         finally:
             os.close(parent)
     try:
-        if os.name == "nt":
+        if on_win:
             info = _windows_info(msvcrt.get_osfhandle(descriptor))
             if info.nNumberOfLinks != 1:
                 raise ValueError("Unsafe lock file.")
-        if os.name != "nt":
+        if not on_win:
             info = os.fstat(descriptor)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise ValueError("Unsafe lock file.")
@@ -183,13 +185,13 @@ def open_lock(path: Path) -> Generator[BinaryIO]:
             os.close(descriptor)
         except OSError:
             pass
-        if os.name == "nt":
+        if on_win:
             _close_windows(parents)
 
 
 def _open_parent(path: Path) -> tuple[int, str, list[tuple[Path, os.stat_result]]]:
     """Anchor every existing POSIX parent and retain pathname identities."""
-    if os.name == "nt":
+    if on_win:
         raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     if ".." in path.parts or not path.is_absolute() or len(path.parts) < 2:
         raise ValueError("Unsafe path traversal.")
@@ -230,7 +232,7 @@ def _check_bindings(bindings: list[tuple[Path, os.stat_result]]) -> None:
 
 def _create_parents(path: Path) -> tuple[int, str, list[tuple[Path, os.stat_result]]]:
     """Create POSIX parents relative to verified directory descriptors."""
-    if os.name == "nt":
+    if on_win:
         raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     if ".." in path.parts or not path.is_absolute() or len(path.parts) < 2:
         raise ValueError("Unsafe path traversal.")
@@ -263,7 +265,7 @@ def _read_descriptor(
     parent: int, name: str, limit: int, missing_ok: bool
 ) -> bytes | None:
     """Read a bounded regular leaf relative to an anchored parent."""
-    if os.name == "nt":
+    if on_win:
         raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0)
     try:
@@ -433,7 +435,7 @@ def _atomic_write_descriptor(
     bindings: list[tuple[Path, os.stat_result]],
 ) -> None:
     """Replace a leaf through an anchored POSIX directory descriptor."""
-    if os.name == "nt":
+    if on_win:
         raise RuntimeError("POSIX descriptor operations are unavailable on Windows.")
     previous = _read_descriptor(parent, name, limit, True)
     if previous != expected:

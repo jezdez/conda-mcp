@@ -12,13 +12,14 @@ from pathlib import Path
 
 import anyio
 import pytest
+from conda.common.compat import on_win
 
 from conda_mcp._launch_windows import launch
 from conda_mcp.serving.execution import CondaExecutor
 
 TREE = Path(__file__).with_name("fixtures") / "windows_process_tree.py"
 
-pytestmark = pytest.mark.skipif(os.name != "nt", reason="native Windows jobs")
+pytestmark = pytest.mark.skipif(not on_win, reason="native Windows jobs")
 
 
 @pytest.fixture

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from conda import CondaError
+from conda.common.compat import on_win
 from conda.models.records import PrefixRecord
 from jsonschema import Draft202012Validator
 
@@ -535,7 +536,8 @@ def test_executable_resolution_uses_native_directory_before_other_platform_path(
 
     [server] = discover(prefix)
 
-    assert server.resolve_executable() == prefix / "bin/example"
+    expected = prefix / ("Scripts/example.exe" if on_win else "bin/example")
+    assert server.resolve_executable() == expected
 
 
 def test_executable_resolution_rejects_duplicate_selected_path_owners(

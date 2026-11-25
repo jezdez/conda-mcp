@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from conda import CondaError
+from conda.common.compat import on_win
 
 from ._windows_job import WindowsJob
 
@@ -31,10 +32,7 @@ _STD_ERROR_HANDLE = -12
 _WAIT_OBJECT_0 = 0
 _WAIT_FAILED = 0xFFFFFFFF
 _WAIT_TIMEOUT = 258
-_is_windows = os.name == "nt"
-
-
-if _is_windows:
+if on_win:
     import msvcrt
 
     _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -175,7 +173,7 @@ def _protocol_payload(payload: str, stdin_handle: int, stdout_handle: int) -> st
 
 def restore_protocol(payload: dict[str, object]) -> None:
     """Restore the saved protocol CRT descriptors and Windows standard handles."""
-    if not _is_windows or _KERNEL32 is None:
+    if not on_win or _KERNEL32 is None:
         raise CondaError(
             "Windows protocol restoration is unavailable on this platform."
         )
@@ -409,7 +407,7 @@ def launch(
     command: list[str], environment: dict[str, str], stdin_fd: int, stdout_fd: int
 ) -> _Process:
     """Start an activated wrapper in a kill-on-close job from creation."""
-    if not _is_windows or _KERNEL32 is None:
+    if not on_win or _KERNEL32 is None:
         raise CondaError("Windows launcher is unavailable on this platform.")
     handles: list[int] = []
     attributes: _AttributeList | None = None

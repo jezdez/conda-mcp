@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import anyio
+from conda.common.compat import on_win
 
 from .models import Diagnostic, ExecutionResult, Plugin, Program
 
@@ -171,14 +172,14 @@ class CondaExecutor:
             windows_job: Any = None
             windows_job_closed = False
             creation_flags = 0
-            if os.name == "nt":
+            if on_win:
                 from .windows import CREATE_SUSPENDED, WindowsJob
 
                 windows_job = WindowsJob()
                 creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | CREATE_SUSPENDED
             process_options: dict[str, Any] = (
                 {"creationflags": creation_flags}
-                if os.name == "nt"
+                if on_win
                 else {"start_new_session": True}
             )
             process = None
@@ -365,7 +366,7 @@ class CondaExecutor:
 
             async def stop_process() -> tuple[float | None, BaseException | None]:
                 nonlocal windows_job_closed
-                if os.name == "nt":
+                if on_win:
                     with suppress(OSError):
                         os.kill(process.pid, signal.CTRL_BREAK_EVENT)
                 else:
@@ -383,7 +384,7 @@ class CondaExecutor:
                 except BaseException as error:
                     graceful_error = error
 
-                if os.name == "nt":
+                if on_win:
                     deadline = time.monotonic() + _WINDOWS_CLEANUP_SECONDS
                     assert windows_job is not None
                     termination_error = graceful_error
@@ -405,14 +406,14 @@ class CondaExecutor:
                 else:
                     with suppress(OSError):
                         os.killpg(process.pid, signal.SIGKILL)
-                if os.name != "nt":
+                if not on_win:
                     if not wait_task.done():
                         await wait_task
                     if graceful_error is not None:
                         raise graceful_error
                 return (
-                    deadline if os.name == "nt" else None,
-                    termination_error if os.name == "nt" else None,
+                    deadline if on_win else None,
+                    termination_error if on_win else None,
                 )
 
             async def cancel_and_cleanup() -> None:
@@ -426,7 +427,7 @@ class CondaExecutor:
                     if not task.done():
                         task.cancel()
                 try:
-                    if os.name == "nt":
+                    if on_win:
                         assert deadline is not None
                         cleanup_error = await collect_windows_tasks(tasks, deadline)
                         if cleanup_error is not None:
@@ -455,7 +456,7 @@ class CondaExecutor:
                 _, pending = await asyncio.wait(tasks, timeout=timeout)
                 if pending:
                     timed_out = True
-                    if os.name == "nt":
+                    if on_win:
                         with anyio.CancelScope(shield=True):
                             await cleanup_once()
                     else:
@@ -469,7 +470,7 @@ class CondaExecutor:
             except BaseException as primary_error:
                 runtime_error = primary_error
                 try:
-                    if os.name == "nt":
+                    if on_win:
                         with anyio.CancelScope(shield=True):
                             await cleanup_once()
                     else:

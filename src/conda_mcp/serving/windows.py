@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import ctypes
-import os
 from ctypes import wintypes
 from typing import Any
+
+from conda.common.compat import on_win
 
 from .._windows_job import WindowsJob as _SharedWindowsJob
 
@@ -16,7 +17,7 @@ _RESUME_FAILED = 0xFFFFFFFF
 
 CREATE_SUSPENDED = 0x00000004
 
-if os.name == "nt":
+if on_win:
     _kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
     _open_process = _kernel32.OpenProcess
     _open_process.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)

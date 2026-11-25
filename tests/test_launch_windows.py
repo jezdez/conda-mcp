@@ -6,6 +6,7 @@ import os
 from types import SimpleNamespace
 
 import pytest
+from conda.common.compat import on_win
 
 from conda_mcp import _launch_windows as windows
 from conda_mcp._launch_windows import _protocol_payload, launch, restore_protocol
@@ -243,7 +244,7 @@ class _LaunchKernel:
 def portable_windows(monkeypatch):
     def configure(kernel, job=None):
         monkeypatch.setattr(windows, "_KERNEL32", kernel)
-        monkeypatch.setattr(windows, "_is_windows", True)
+        monkeypatch.setattr(windows, "on_win", True)
         monkeypatch.setattr(
             windows,
             "msvcrt",
@@ -694,18 +695,18 @@ def test_process_wait_notes_job_close_when_process_close_also_fails(monkeypatch)
 
 
 def test_restore_protocol_is_unavailable_off_windows():
-    if os.name != "nt":
+    if not on_win:
         with pytest.raises(Exception, match="unavailable"):
             restore_protocol({"stdin_handle": 101, "stdout_handle": 202})
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows native launcher")
+@pytest.mark.skipif(not on_win, reason="Windows native launcher")
 def test_windows_kernel32_binding_is_available():
     assert windows._KERNEL32 is not None
     assert callable(windows._KERNEL32.CreateProcessW)
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows native launcher")
+@pytest.mark.skipif(not on_win, reason="Windows native launcher")
 def test_launch_runs_a_named_fixture_with_a_contained_process(tmp_path):
     fixture = os.path.join(
         os.path.dirname(__file__), "fixtures", "windows_launch_wrapper.py"

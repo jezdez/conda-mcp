@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import os
 import select
@@ -21,6 +23,19 @@ from conda_mcp.run import (
 from conda_mcp.servers import Server, discover
 
 PROBE = Path(__file__).with_name("activation_probe.py")
+
+
+def test_asyncio_subprocess_transport_receives_protocol_object():
+    """Guard the private test-only cancellation hook used on Windows."""
+    loop = asyncio.new_event_loop()
+    try:
+        signature = inspect.signature(loop._make_subprocess_transport)
+        assert next(iter(signature.parameters)) == "protocol"
+        source = inspect.getsource(asyncio.base_events.BaseEventLoop.subprocess_exec)
+        assert "protocol = protocol_factory()" in source
+        assert "self._make_subprocess_transport(\n            protocol," in source
+    finally:
+        loop.close()
 
 
 def test_run_requires_a_stdio_server(tmp_path: Path):
@@ -432,3 +447,44 @@ def test_windows_failing_activation_never_executes_server(executable_server):
     )
     assert result.returncode != 0 and result.stdout == ""
     assert "Activation script" in result.stderr
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows activation")
+def test_windows_activation_preserves_protocol_bytes_and_literal_arguments(
+    executable_server,
+):
+    hook = executable_server / "etc/conda/activate.d/noisy.bat"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(
+        "@echo off\r\necho ACTIVATION STDOUT\r\necho ACTIVATION STDERR 1>&2\r\n"
+        "set /p ignored=\r\nset MCP_TEST_TOKEN=\r\n",
+        encoding="utf-8",
+    )
+    protocol = b'{"literal": "snowman \\u2603"}\n'
+    result = subprocess.run(
+        [sys.executable, "-I", str(PROBE), str(executable_server)],
+        input=protocol,
+        capture_output=True,
+        timeout=30,
+        env={**os.environ, "MCP_TEST_TOKEN": "present"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == b"READY\r\n" + protocol + b"EOF\r\n"
+    assert b"ACTIVATION STDOUT" in result.stderr
+    assert b"ACTIVATION STDERR" in result.stderr
+
+    arguments = ["", "two words", "snowman \u2603", "$(literal) & ^"]
+    metadata = subprocess.run(
+        [sys.executable, "-I", str(PROBE), str(executable_server), *arguments],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={
+            **os.environ,
+            "MCP_TEST_TOKEN": "present",
+            "MCP_TEST_MODE": "metadata",
+        },
+    )
+    assert metadata.returncode == 0, metadata.stderr
+    assert json.loads(metadata.stdout)["argv"] == arguments

@@ -169,11 +169,20 @@ def _request(
                 assert line is not None, "Server closed before replying."
                 received.append(json.loads(line))
         process.stdin.close()
+        process.stdin = None
         stderr = process.stderr.read() if process.stderr else ""
         process.wait(timeout=60)
-    except BaseException:
-        process.kill()
-        process.communicate(timeout=10)
+    except BaseException as error:
+        try:
+            if process.poll() is None:
+                process.kill()
+            _, stderr = process.communicate(timeout=10)
+            error.add_note(
+                f"{package}/{server}: manager exit status {process.returncode}\n"
+                f"stderr (last 8192 characters):\n{stderr[-8192:]}"
+            )
+        except BaseException as cleanup:
+            error.add_note(f"Manager cleanup failed: {type(cleanup).__name__}")
         raise
     assert process.returncode == 0, stderr
     return received

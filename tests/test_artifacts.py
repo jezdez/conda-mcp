@@ -29,6 +29,42 @@ def _script_module(name: str):
     return module
 
 
+def test_example_request_reports_manager_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    examples = _script_module("test_examples")
+
+    def failed_manager(*args, **kwargs):
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.stdin.readline(); "
+                "sys.stderr.write('launch diagnostic\\n'); sys.exit(7)",
+            ],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        examples,
+        "subprocess",
+        SimpleNamespace(Popen=failed_manager, PIPE=subprocess.PIPE),
+    )
+    with pytest.raises(AssertionError, match="Server closed before replying") as caught:
+        examples._request(
+            tmp_path,
+            "example-package",
+            "example-server",
+            [{"id": 1}],
+            os.environ.copy(),
+        )
+
+    diagnostic = "\n".join(getattr(caught.value, "__notes__", ()))
+    assert "example-package/example-server" in diagnostic
+    assert "exit status 7" in diagnostic
+    assert "launch diagnostic" in diagnostic
+
+
 def test_distribution_validation_rejects_a_wheel_with_a_bad_crc(tmp_path: Path) -> None:
     """A corrupt wheel must fail before metadata is trusted."""
     wheel = tmp_path / "conda_mcp-1.0.0-py3-none-any.whl"

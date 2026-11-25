@@ -9,7 +9,9 @@ _is_windows = os.name == "nt"
 if _is_windows:
     try:
         import pywintypes
-        import win32job
+
+        # pywin32 ships win32job as a native extension without inline typing.
+        import win32job  # ty: ignore[import-not-found]
     except ImportError as error:
         if error.name not in {"pywintypes", "win32job"}:
             raise

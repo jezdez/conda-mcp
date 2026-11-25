@@ -43,7 +43,8 @@ addopts = "-ra --cov --cov-report=term-missing --cov-report=xml:coverage.xml"
 source = ["conda_mcp"]
 relative_files = true
 branch = true
-patch = ["subprocess"]
+# CI enables execv on POSIX. Repeating subprocess is a safe Windows fallback.
+patch = ["subprocess", "${CONDA_MCP_EXECV_PATCH-subprocess}"]
 omit = ["*/conda_mcp/_version.py"]
 
 [tool.coverage.paths]

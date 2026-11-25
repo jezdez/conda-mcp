@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conda import CondaError
 from conda.common.compat import on_win
 from pip._vendor.distlib.scripts import ScriptMaker
 
@@ -137,6 +138,17 @@ def test_wait_kills_process_group_after_interrupt():
         if process.poll() is None:
             process.kill()
             process.wait()
+
+
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
+def test_interrupt_never_signals_the_callers_process_group(monkeypatch):
+    from types import SimpleNamespace
+
+    sent = []
+    monkeypatch.setattr(os, "killpg", lambda *args: sent.append(args))
+    with pytest.raises(CondaError, match="caller's process group"):
+        _reap_after_interrupt(SimpleNamespace(pid=os.getpgrp()), grace=0)
+    assert sent == []
 
 
 @pytest.mark.skipif(on_win, reason="POSIX process groups")
@@ -430,6 +442,40 @@ def test_native_batch_wrapper_suppresses_autorun_and_checks_exit(tmp_path, monke
     assert 'set "_CONDA_MCP_EXIT=%ERRORLEVEL%"' in wrapper.read_text()
     assert 'CALL "C:\\Conda\\condabin\\conda.bat" deactivate' in wrapper.read_text()
     assert "exit /b %_CONDA_MCP_EXIT%" in wrapper.read_text()
+
+
+@pytest.mark.parametrize(
+    ("suffix", "source", "command"),
+    [
+        (".bat", "python -I -m conda_mcp._launch\nexit /b 0\n", ["cmd.exe", "/c"]),
+        (".bat", "CALL conda.bat activate prefix\nexit /b 0\n", ["cmd.exe", "/c"]),
+        (
+            ".bat",
+            "CALL conda.bat activate prefix\npython -I -m conda_mcp._launch\n",
+            ["cmd.exe", "/c"],
+        ),
+        (
+            ".bat",
+            "CALL conda.bat activate prefix\n"
+            "python -I -m conda_mcp._launch\nexit /b 0\n",
+            ["cmd.exe", "/k"],
+        ),
+        (".sh", "conda activate prefix\npython -I -m conda_mcp._launch\n", ["bash"]),
+        (".sh", 'eval "$(conda shell.posix hook)"\nconda activate prefix\n', ["bash"]),
+    ],
+)
+def test_unsupported_activation_wrapper_is_removed(
+    tmp_path, monkeypatch, suffix, source, command
+):
+    wrapper = tmp_path / ("wrapper" + suffix)
+    wrapper.write_text(source)
+    monkeypatch.setattr(
+        "conda_mcp.run.wrap_subprocess_call",
+        lambda *args: (str(wrapper), [*command, str(wrapper)]),
+    )
+    with pytest.raises(CondaError, match="unsupported activation wrapper"):
+        _activation_wrapper(tmp_path, Path(sys.executable))
+    assert not wrapper.exists()
 
 
 @pytest.mark.skipif(not on_win, reason="native Windows activation")

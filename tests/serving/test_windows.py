@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+
 import pytest
 
 from conda_mcp.serving import windows
@@ -85,3 +87,45 @@ def test_resume_error_propagates_without_reinterpreting_process_state(
         owner.assign_and_resume(42)
 
     assert process_bindings[0] == ["close:101", "close:202"]
+
+
+def test_process_open_failure_never_assigns_or_resumes(monkeypatch, process_bindings):
+    job = _Job()
+    monkeypatch.setattr(windows, "_SharedWindowsJob", lambda: job)
+    monkeypatch.setattr(windows, "_open_process", lambda *args: None)
+    with pytest.raises(OSError, match="OpenProcess"):
+        windows.WindowsJob().assign_and_resume(42)
+    assert job.assigned == []
+    assert process_bindings[0] == []
+
+
+def test_failed_thread_snapshot_is_not_closed_as_a_valid_handle(monkeypatch):
+    closed = []
+    monkeypatch.setattr(
+        windows, "_create_snapshot", lambda *args: windows._INVALID_HANDLE_VALUE
+    )
+    monkeypatch.setattr(windows, "_close_handle", closed.append)
+    with pytest.raises(OSError, match="CreateToolhelp32Snapshot"):
+        windows._open_process_thread(42)
+    assert closed == []
+
+
+@pytest.mark.parametrize("matching_thread", [False, True])
+def test_thread_lookup_failure_closes_the_snapshot(monkeypatch, matching_thread):
+    closed = []
+    monkeypatch.setattr(windows, "_create_snapshot", lambda *args: 303)
+
+    def first(snapshot, pointer):
+        entry = ctypes.cast(pointer, ctypes.POINTER(windows._ThreadEntry)).contents
+        entry.th32OwnerProcessID = 42
+        entry.th32ThreadID = 7
+        return matching_thread
+
+    monkeypatch.setattr(windows, "_thread_first", first)
+    monkeypatch.setattr(windows, "_open_thread", lambda *args: None)
+    monkeypatch.setattr(windows, "_close_handle", closed.append)
+    with pytest.raises(
+        OSError, match="OpenThread" if matching_thread else "no thread found"
+    ):
+        windows._open_process_thread(42)
+    assert closed == [303]

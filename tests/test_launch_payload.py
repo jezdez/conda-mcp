@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from types import SimpleNamespace
 
 import pytest
+from conda import CondaError
 from conda.common.compat import on_win
 
 from conda_mcp import _launch
@@ -57,6 +58,19 @@ def test_payload_rejects_duplicate_keys_and_oversize_input(payload):
         LaunchPayload.decode(encoded[:-1] + ',"stdin":42}')
     with pytest.raises(ValueError):
         LaunchPayload.decode(encoded + " " * 65536)
+
+
+def test_payload_rejects_oversize_arguments_before_launch(payload):
+    with pytest.raises(CondaError, match="too large"):
+        replace(payload, argv=(payload.executable, "x" * 65537)).dump()
+
+
+@pytest.mark.parametrize("field", ["argv", "required", "identity"])
+def test_payload_rejects_nonarray_collections(payload, field):
+    data = asdict(payload)
+    data[field] = {"unexpected": "mapping"}
+    with pytest.raises(ValueError, match="invalid launch payload"):
+        LaunchPayload.decode(json.dumps(data))
 
 
 def test_payload_handles_windows_raw_handles_without_treating_them_as_fds(payload):

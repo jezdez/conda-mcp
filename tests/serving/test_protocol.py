@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 
@@ -14,7 +15,13 @@ from mcp.client.stdio import stdio_client
 @pytest.mark.anyio
 async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
     parameters = StdioServerParameters(
-        command=sys.executable, args=["-I", "-m", "conda", "mcp", "serve"]
+        command=sys.executable,
+        args=["-I", "-m", "conda", "mcp", "serve"],
+        env={
+            name: os.environ[name]
+            for name in ("COVERAGE_PROCESS_CONFIG",)
+            if name in os.environ
+        },
     )
 
     with anyio.fail_after(300):

@@ -101,6 +101,62 @@ def test_atomic_write_creates_only_a_missing_leaf_when_expected_is_none(tmp_path
     assert path.read_bytes() == b"{}"
 
 
+@pytest.mark.parametrize("operation", ["fsync", "replace"])
+def test_atomic_write_failure_preserves_original_and_removes_staging(
+    tmp_path, monkeypatch, operation
+):
+    path = tmp_path / "config.json"
+    path.write_bytes(b"original")
+    error = OSError("injected write failure")
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(files.os, operation, fail)
+    with pytest.raises(OSError) as caught:
+        atomic_write(path, b"new", b"original")
+    assert caught.value is error
+    assert path.read_bytes() == b"original"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_atomic_write_preserves_a_concurrent_edit_after_staging(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    path.write_bytes(b"original")
+    fsync = os.fsync
+
+    def edit_during_flush(fd):
+        path.write_bytes(b"concurrent edit")
+        fsync(fd)
+
+    monkeypatch.setattr(files.os, "fsync", edit_during_flush)
+    with pytest.raises(ValueError, match="changed"):
+        atomic_write(path, b"new", b"original")
+    assert path.read_bytes() == b"concurrent edit"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.skipif(on_win, reason="Windows pins parent directories against renames")
+def test_atomic_write_rejects_a_disappearing_parent(tmp_path, monkeypatch):
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    path = parent / "config.json"
+    path.write_bytes(b"original")
+    moved = tmp_path / "moved"
+    fsync = os.fsync
+
+    def move_during_flush(fd):
+        parent.rename(moved)
+        fsync(fd)
+
+    monkeypatch.setattr(files.os, "fsync", move_during_flush)
+    with pytest.raises(ValueError, match="changed"):
+        atomic_write(path, b"new", b"original")
+    assert not parent.exists()
+    assert (moved / "config.json").read_bytes() == b"original"
+    assert list(moved.iterdir()) == [moved / "config.json"]
+
+
 @pytest.mark.skipif(on_win, reason="POSIX permission bits")
 def test_atomic_write_preserves_mode_despite_a_permissive_umask(tmp_path: Path):
     path = tmp_path / "config.json"

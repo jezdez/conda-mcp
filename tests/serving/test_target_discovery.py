@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from conda_mcp.serving.command import command_tools
 from conda_mcp.serving.discovery import (
     discover_plugins,
     discover_program,
@@ -608,3 +609,139 @@ def test_completion_reports_unavailable_without_conda_completion(
 
     assert payload["availability"] == "not_installed"
     assert payload["hint"]
+
+
+@pytest.fixture
+def completion_api(monkeypatch):
+    manifest = SimpleNamespace(
+        version=1,
+        generated_at="2026-08-22T12:00:00Z",
+        plugin_hash="hash",
+        root_options={},
+        commands={},
+        aliases={},
+        runtime_sources={},
+    )
+    modules = {
+        "conda_completion.exceptions": SimpleNamespace(ManifestError=RuntimeError),
+        "conda_completion.manifest": SimpleNamespace(
+            read_manifest=lambda _path: manifest
+        ),
+        "conda_completion.paths": SimpleNamespace(
+            manifest_path=lambda: "completion.msgpack"
+        ),
+        "conda_completion.plugin": SimpleNamespace(
+            plugin_entry_point_hash=lambda: "hash"
+        ),
+    }
+    monkeypatch.setattr(
+        "conda_mcp.serving.discovery.import_module", modules.__getitem__
+    )
+    monkeypatch.setattr(
+        "conda_mcp.serving.discovery.metadata.version", lambda _name: "0.3.0"
+    )
+    return manifest, modules
+
+
+@pytest.mark.parametrize("path", [("",), ("--option",), ("two words",), ("env\nlist",)])
+def test_completion_rejects_invalid_command_paths(path):
+    with pytest.raises(ValueError, match="invalid_command_path"):
+        inspect_completion_command(path)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ModuleNotFoundError("missing dependency", name="dependency"),
+        ImportError("bad API"),
+    ],
+)
+def test_completion_reports_broken_imports(monkeypatch, error):
+    def fail(_name):
+        raise error
+
+    monkeypatch.setattr("conda_mcp.serving.discovery.import_module", fail)
+    result = inspect_completion_command(())
+    assert result["availability"] == "unavailable"
+    assert result["command"] is None
+    assert result["hint"]
+
+
+@pytest.mark.parametrize("problem", ["function", "field", "option"])
+def test_completion_rejects_incompatible_metadata(completion_api, problem):
+    manifest, modules = completion_api
+    if problem == "function":
+        modules["conda_completion.manifest"].read_manifest = None
+    elif problem == "field":
+        del manifest.commands
+    else:
+        manifest.root_options["--invalid"] = object()
+    result = inspect_completion_command(())
+    assert result["availability"] == "unavailable"
+    assert result["command"] is None
+    assert result["manifest"] is None
+
+
+def test_completion_unknown_command_is_not_an_empty_success(completion_api):
+    with pytest.raises(LookupError, match="unknown_command"):
+        inspect_completion_command(("missing",))
+
+
+def test_completion_hash_failure_keeps_metadata_with_unknown_freshness(completion_api):
+    _, modules = completion_api
+
+    def fail():
+        raise RuntimeError("plugin failed")
+
+    modules["conda_completion.plugin"].plugin_entry_point_hash = fail
+    result = inspect_completion_command(())
+    assert result["availability"] == "available"
+    assert result["manifest"]["current_plugin_hash"] is None
+    assert result["manifest"]["stale"] is None
+
+
+def test_completion_accepts_a_development_version_with_the_public_api(
+    completion_api, monkeypatch
+):
+    monkeypatch.setattr(
+        "conda_mcp.serving.discovery.metadata.version", lambda _name: "dev"
+    )
+    result = inspect_completion_command(())
+    assert result["availability"] == "available"
+    assert result["manifest"]["conda_completion_version"] == "dev"
+
+
+@pytest.mark.parametrize(
+    "choices", [[], {1: argparse.ArgumentParser()}, {"child": object()}]
+)
+def test_invalid_subparser_choices_disable_generated_tools(choices):
+    parser = argparse.ArgumentParser(prog="conda")
+    action = parser.add_subparsers()
+    action.choices = choices
+    program = inspect_parser(parser, conda_version="test")
+    assert program.root.raw_only
+    assert program.diagnostics
+    assert command_tools(program) == ()
+
+
+def test_colliding_argument_names_keep_distinct_values():
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers().add_parser("example")
+    child.add_argument("--a-b")
+    child.add_argument("--a_b")
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+    assert tool.compile({"a_b": "first", "a_b_2": "second"}) == (
+        "example",
+        "--a-b",
+        "first",
+        "--a_b",
+        "second",
+    )
+
+
+def test_plugin_discovery_skips_unnamed_distributions(monkeypatch):
+    monkeypatch.setattr(
+        "conda_mcp.serving.discovery.metadata.distributions",
+        lambda: [SimpleNamespace(metadata={"Name": None})],
+    )
+    assert inspect_plugins() == ()

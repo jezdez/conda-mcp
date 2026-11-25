@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import anyio
 import pytest
+from conda.common.compat import on_win
 
 from conda_mcp.serving.execution import CompletionQueryError, CondaExecutor
 
@@ -880,3 +881,89 @@ async def test_shell_activation_returns_code_without_mutating_server_environment
     assert result.exit_code == 0
     assert result.stdout
     assert os.environ.get("CONDA_PREFIX") == previous_prefix
+
+
+def test_executor_rejects_a_missing_executable(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        CondaExecutor(tmp_path / "missing")
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(on_win, reason="POSIX executable permissions")
+async def test_launch_permission_failure_propagates_without_a_child(tmp_path):
+    executable = tmp_path / "not-executable"
+    executable.write_text("#!/bin/sh\nexit 0\n")
+    executable.chmod(0o600)
+    with pytest.raises(PermissionError):
+        await CondaExecutor(executable).execute(())
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "error",
+    [TypeError("malformed"), ValueError("malformed"), AttributeError("malformed")],
+)
+async def test_completion_invalid_metadata_maps_to_a_query_error(monkeypatch, error):
+    def fail(_path):
+        raise error
+
+    monkeypatch.setattr("conda_mcp.serving.discovery.inspect_completion_command", fail)
+    with pytest.raises(CompletionQueryError, match="invalid_response") as caught:
+        await CondaExecutor(Path(sys.executable)).inspect_completion_command(())
+    assert caught.value.__cause__ is error
+
+
+@pytest.mark.anyio
+async def test_child_closing_stdin_does_not_hide_its_exit_status():
+    executor = CondaExecutor(Path(sys.executable))
+    result = await executor.execute(
+        ["-c", "import os, time\nos.close(0)\ntime.sleep(0.1)\nraise SystemExit(7)"],
+        stdin="x" * 1_048_576,
+    )
+    assert result.exit_code == 7
+    assert not result.timed_out
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("terminate_fails", [False, True])
+async def test_windows_timeout_preserves_cleanup_failures(
+    monkeypatch, tmp_path, terminate_fails
+):
+    events = []
+    process = _WindowsProcess(events, reap=False)
+    process.stdout.feed_eof()
+    process.stderr.feed_eof()
+    close_error = OSError(5, "close failed")
+    terminate_error = OSError(6, "terminate failed") if terminate_fails else None
+    job = _WindowsJob(events, close_error=close_error, terminate_error=terminate_error)
+    _install_windows_fakes(monkeypatch, process, job)
+    import conda_mcp.serving.execution as execution
+
+    monkeypatch.setattr(execution, "_WINDOWS_CLEANUP_SECONDS", 0.01)
+    with pytest.raises(OSError) as caught:
+        await _windows_executor(tmp_path).execute(())
+    assert caught.value is (terminate_error or close_error)
+    assert "terminate" in events and "close" in events
+    assert process.wait_cancelled
+    if terminate_fails:
+        assert any("close" in note for note in caught.value.__notes__)
+
+
+@pytest.mark.anyio
+async def test_windows_assignment_failure_remains_primary_when_termination_fails(
+    monkeypatch, tmp_path
+):
+    events = []
+    error = OSError(5, "assignment failed")
+    process = _WindowsProcess(events)
+    job = _WindowsJob(
+        events, assign_error=error, terminate_error=OSError(6, "terminate failed")
+    )
+    _install_windows_fakes(monkeypatch, process, job)
+    with pytest.raises(OSError) as caught:
+        await _windows_executor(tmp_path).execute(())
+    assert caught.value is error
+    assert any("terminate" in note for note in error.__notes__)
+    assert events.index("kill") < events.index("wait")
+    assert "close" in events

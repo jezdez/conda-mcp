@@ -132,7 +132,7 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
             prefix = (flag,) if flag else ()
             if argument.nargs == "?" and value is None:
                 return prefix
-            if argument.nargs is None:
+            if argument.nargs in (None, "?"):
                 return (*prefix, str(value))
             return (*prefix, *(str(item) for item in value))
         case ActionKind.APPEND:
@@ -142,7 +142,7 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
                     tokens.append(flag)
                 if argument.nargs == "?" and occurrence is None:
                     continue
-                if argument.nargs is None:
+                if argument.nargs in (None, "?"):
                     tokens.append(str(occurrence))
                 else:
                     tokens.extend(str(item) for item in occurrence)

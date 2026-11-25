@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 from mcp import Client, MCPError
+from mcp.types import INVALID_PARAMS, INVALID_REQUEST
 
 from conda_mcp.serving.capabilities import Capabilities
+from conda_mcp.serving.execution import CompletionQueryError
 from conda_mcp.serving.models import (
     ActionKind,
     Argument,
@@ -423,3 +425,129 @@ async def test_write_and_exec_combinations_bound_spawning(
                 await client.call_tool(name, arguments)
 
     assert executor.calls == spawned
+
+
+@pytest.mark.anyio
+async def test_invalid_generated_input_never_executes(server_factory):
+    executor = RecordingExecutor()
+    server = server_factory(executor, (Command(name="info"),), SafetyPolicy())
+    async with Client(server.server) as client:
+        with pytest.raises(MCPError) as caught:
+            await client.call_tool("conda_info", {"secret-value": True})
+    assert caught.value.code == INVALID_PARAMS
+    assert "secret-value" not in str(caught.value)
+    assert executor.calls == []
+
+
+@pytest.mark.anyio
+async def test_absent_capabilities_do_not_expose_a_resource():
+    server = CondaMCPServer(RecordingExecutor())
+    async with Client(server.server) as client:
+        assert (await client.list_resources()).resources == []
+        with pytest.raises(MCPError) as caught:
+            await client.read_resource(CAPABILITIES_URI)
+    assert caught.value.code == INVALID_PARAMS
+
+
+@pytest.mark.anyio
+async def test_invalid_execution_directory_returns_a_safe_error(fake_conda, tmp_path):
+    executor, script = fake_conda
+    server = CondaMCPServer(
+        executor, policy=SafetyPolicy(allow_exec=True, allow_write=True)
+    )
+    with pytest.raises(MCPError) as caught:
+        await server.execute(
+            {
+                "argv": [str(script), "json"],
+                "cwd": str(tmp_path / "secret-directory"),
+            }
+        )
+    assert caught.value.code == INVALID_PARAMS
+    assert "secret-directory" not in str(caught.value)
+
+
+@pytest.mark.anyio
+async def test_completion_rejects_invalid_input_without_querying():
+    executor = RecordingExecutor()
+    server = CondaMCPServer(executor)
+    with pytest.raises(MCPError) as caught:
+        await server.inspect_completion_command({"command_path": "secret-value"})
+    assert caught.value.code == INVALID_PARAMS
+    assert "secret-value" not in str(caught.value)
+    assert executor.completion_calls == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("error", "code", "message"),
+    [
+        (
+            CompletionQueryError("unknown_command"),
+            INVALID_PARAMS,
+            "Unknown conda command path",
+        ),
+        (
+            CompletionQueryError("invalid_command_path"),
+            INVALID_PARAMS,
+            "Invalid conda command path",
+        ),
+        (CompletionQueryError("invalid_response"), INVALID_REQUEST, "invalid metadata"),
+        (CompletionQueryError("unavailable"), INVALID_REQUEST, "unavailable"),
+        (OSError("secret-value"), INVALID_REQUEST, "unavailable"),
+    ],
+)
+async def test_completion_errors_have_safe_protocol_codes(
+    monkeypatch, error, code, message
+):
+    executor = RecordingExecutor()
+
+    async def fail(_path):
+        raise error
+
+    monkeypatch.setattr(executor, "inspect_completion_command", fail)
+    server = CondaMCPServer(executor)
+    with pytest.raises(MCPError) as caught:
+        await server.inspect_completion_command({})
+    assert caught.value.code == code
+    assert message in str(caught.value)
+    assert "secret-value" not in str(caught.value)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("invalid", [{}, {"secret-value": float("nan")}])
+async def test_completion_rejects_invalid_output(monkeypatch, invalid):
+    executor = RecordingExecutor()
+    payload = await executor.inspect_completion_command(())
+
+    async def malformed(_path):
+        return {} if not invalid else {**payload, "command": invalid}
+
+    monkeypatch.setattr(executor, "inspect_completion_command", malformed)
+    with pytest.raises(MCPError) as caught:
+        await CondaMCPServer(executor).inspect_completion_command({})
+    assert caught.value.code == INVALID_REQUEST
+    assert "invalid metadata" in str(caught.value)
+    assert "secret-value" not in str(caught.value)
+
+
+@pytest.mark.anyio
+async def test_failed_plugin_inspection_after_mutation_keeps_restart_required(
+    monkeypatch, server_factory
+):
+    executor = RecordingExecutor()
+
+    async def fail():
+        raise OSError("plugin metadata unavailable")
+
+    monkeypatch.setattr(executor, "discover_plugin_state", fail)
+    server = server_factory(
+        executor,
+        (Command(name="install"), Command(name="info")),
+        SafetyPolicy(allow_write=True),
+    )
+    async with Client(server.server) as client:
+        changed = await client.call_tool("conda_install", {})
+        read = await client.call_tool("conda_info", {})
+    assert changed.structured_content["restart_required"] is True
+    assert read.structured_content["restart_required"] is True
+    assert executor.calls == [("install",), ("info",)]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from dataclasses import FrozenInstanceError
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,7 @@ from conda_mcp.serving.command import (
     canonical_tool_name,
     command_tools,
 )
+from conda_mcp.serving.discovery import inspect_parser
 from conda_mcp.serving.models import (
     ActionKind,
     Argument,
@@ -66,6 +68,118 @@ def make_tool(
             ),
         )
     )
+
+
+@pytest.mark.parametrize(
+    ("action", "converter", "positional", "value", "argv"),
+    [
+        ("store", str, False, "numpy", ("--value", "numpy")),
+        ("store", str, False, "two words", ("--value", "two words")),
+        ("store", int, False, 7, ("--value", "7")),
+        ("store", float, False, 1.5, ("--value", "1.5")),
+        ("store", str, False, None, ("--value",)),
+        ("store", str, True, "numpy", ("numpy",)),
+        ("store", str, True, None, ()),
+        (
+            "append",
+            str,
+            False,
+            ["two words", None, "last"],
+            ("--value", "two words", "--value", "--value", "last"),
+        ),
+        ("append", int, False, [7, 8], ("--value", "7", "--value", "8")),
+    ],
+)
+def test_optional_values_round_trip_through_the_discovered_parser(
+    action, converter, positional, value, argv
+):
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument(
+        "value" if positional else "--value",
+        action=action,
+        type=converter,
+        nargs="?",
+    )
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    compiled = tool.compile({"value": value})
+
+    assert compiled == ("example", *argv)
+    assert parser.parse_args(compiled).value == value
+
+
+@pytest.mark.parametrize(
+    ("options", "value", "invalid", "argv", "parsed"),
+    [
+        ({"action": "append", "required": True}, ["a"], [], ("--value", "a"), ["a"]),
+        (
+            {"action": "extend", "required": True},
+            ["ab"],
+            [],
+            ("--value", "ab"),
+            ["a", "b"],
+        ),
+        (
+            {"action": "extend", "required": True, "nargs": "?", "const": "c"},
+            ["ab", None],
+            [],
+            ("--value", "ab", "--value"),
+            ["a", "b", "c"],
+        ),
+        ({"action": "store_true", "required": True}, True, False, ("--value",), True),
+        ({"type": float, "choices": [1.5, 2.5]}, 1.5, 3.0, ("--value", "1.5"), 1.5),
+    ],
+)
+def test_generated_inputs_enforce_parser_requirements(
+    options, value, invalid, argv, parsed
+):
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", **options)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    compiled = tool.compile({"value": value})
+
+    assert compiled == ("example", *argv)
+    assert parser.parse_args(compiled).value == parsed
+    with pytest.raises(ValidationError):
+        tool.compile({"value": invalid})
+
+
+@pytest.mark.parametrize("required", [False, True])
+@pytest.mark.parametrize(
+    ("options", "active", "inactive", "argv"),
+    [
+        ({"action": "store_false"}, False, True, ("--value",)),
+        ({"action": "count"}, 2, 0, ("--value", "--value")),
+        ({"action": "append"}, ["a"], [], ("--value", "a")),
+        ({"action": "append_const", "const": "a"}, 1, 0, ("--value",)),
+        ({"action": "extend"}, ["a"], [], ("--value", "a")),
+        ({"action": "extend", "nargs": "?", "const": "a"}, [None], [], ("--value",)),
+    ],
+)
+def test_exclusive_groups_count_only_arguments_that_emit_tokens(
+    options, active, inactive, argv, required
+):
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    group = child.add_mutually_exclusive_group(required=required)
+    group.add_argument("--value", **options)
+    group.add_argument("--other", action="store_true")
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    assert tool.compile({"value": active, "other": False}) == ("example", *argv)
+    compiled = tool.compile({"value": inactive, "other": True})
+    assert compiled == ("example", "--other")
+    assert parser.parse_args(compiled).other is True
+    with pytest.raises(ValidationError):
+        tool.compile({"value": active, "other": True})
+    if required:
+        with pytest.raises(ValidationError):
+            tool.compile({"value": inactive, "other": False})
+    else:
+        assert tool.compile({"value": inactive, "other": False}) == ("example",)
 
 
 def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:

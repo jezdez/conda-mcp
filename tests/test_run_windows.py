@@ -86,6 +86,40 @@ def test_windows_reap_uses_remaining_cleanup_budget(monkeypatch):
     assert timeouts == [1.0]
 
 
+@pytest.mark.parametrize("failure", [None, "close", "wait"])
+def test_windows_reap_finishes_or_reports_the_first_cleanup_failure(
+    monkeypatch, failure
+):
+    monkeypatch.setattr(runner, "on_win", True)
+    process = _Process(None)
+    error = OSError(5, "cleanup failed")
+
+    def kill():
+        process.calls.append("kill")
+
+    def close():
+        process.calls.append("close")
+        if failure == "close":
+            raise error
+
+    def wait(timeout):
+        process.calls.append("wait")
+        if failure == "wait":
+            raise error
+        return 0
+
+    monkeypatch.setattr(process, "kill", kill)
+    monkeypatch.setattr(process, "_conda_mcp_close_job", close)
+    monkeypatch.setattr(process, "wait", wait)
+    if failure:
+        with pytest.raises(OSError) as caught:
+            runner._reap_after_interrupt(process, grace=0.01)
+        assert caught.value is error
+    else:
+        runner._reap_after_interrupt(process, grace=0.01)
+    assert process.calls == ["kill", "close", "wait"]
+
+
 def test_windows_wait_preserves_interruption_and_restores_handlers(monkeypatch):
     monkeypatch.setattr(runner, "on_win", True)
     error = KeyboardInterrupt()

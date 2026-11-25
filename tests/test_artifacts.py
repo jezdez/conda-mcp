@@ -236,6 +236,31 @@ def test_example_script_passes_an_isolated_rattler_cache_to_builders(
     assert cache.name == "rattler-cache"
 
 
+def test_example_script_reports_server_startup_errors(tmp_path, monkeypatch):
+    test_examples = _script_module("test_examples")
+    popen = subprocess.Popen
+
+    def failing_server(*args, **kwargs):
+        return popen(
+            [sys.executable, "-c", "raise SystemExit('server startup failed')"],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(test_examples.subprocess, "Popen", failing_server)
+    with pytest.raises(AssertionError, match="Server closed") as error:
+        test_examples._request(
+            tmp_path,
+            "provider",
+            "example",
+            [{"id": 0, "method": "initialize"}],
+            dict(os.environ),
+        )
+    assert any(
+        "server startup failed" in note
+        for note in getattr(error.value, "__notes__", ())
+    )
+
+
 @pytest.mark.skipif(
     shutil.which("node") is None, reason="Node runs in the artifact environment"
 )

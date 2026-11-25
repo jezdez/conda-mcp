@@ -116,12 +116,9 @@ def test_run_stops_when_activation_hook_fails(install_package, tmp_path: Path):
     assert run(server, ()) == 17
 
 
-def test_trampoline_rejects_oversized_or_invalid_payload(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setenv("_CONDA_MCP_LAUNCH", "{}")
+def test_trampoline_rejects_oversized_or_invalid_payload():
     with pytest.raises(ValueError, match="invalid launch payload"):
-        LaunchPayload.decode(os.environ["_CONDA_MCP_LAUNCH"])
+        LaunchPayload.decode("{}")
     with pytest.raises(ValueError, match="too large"):
         LaunchPayload.decode("x" * 65537)
 
@@ -226,12 +223,11 @@ def test_protocol_streams_before_exit_and_receives_eof(executable_server):
         env={**os.environ, "MCP_TEST_TOKEN": ""},
     )
     try:
-        newline = b"\r\n" if on_win else b"\n"
-        assert process.stdout.readline() == b"READY" + newline
+        assert process.stdout.readline() == b"READY\n"
         assert process.poll() is None
         stdout, stderr = process.communicate(b'{"literal": "protocol"}\n', timeout=15)
         assert process.returncode == 0, stderr
-        assert stdout == b'{"literal": "protocol"}\nEOF' + newline
+        assert stdout == b'{"literal": "protocol"}\nEOF\n'
     finally:
         if process.poll() is None:
             process.kill()
@@ -478,6 +474,23 @@ def test_unsupported_activation_wrapper_is_removed(
     assert not wrapper.exists()
 
 
+def test_conda_batch_wrapper_preserves_activation_and_deactivates(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr("conda.utils.on_win", True)
+    monkeypatch.setattr("conda.utils.get_comspec", lambda: "cmd.exe")
+    wrapper, command = _activation_wrapper(tmp_path, Path(sys.executable))
+    try:
+        source = wrapper.read_text(encoding="utf-8")
+        assert "/d" in command and "/v:off" in command
+        assert "@CALL " in source and " activate " in source
+        assert "@IF %ERRORLEVEL% NEQ 0 EXIT /b %ERRORLEVEL%" in source
+        assert source.index("-I -m conda_mcp._launch") < source.index(" deactivate")
+        assert source.endswith("exit /b %_CONDA_MCP_EXIT%\n")
+    finally:
+        wrapper.unlink()
+
+
 @pytest.mark.skipif(not on_win, reason="native Windows activation")
 def test_windows_failing_activation_never_executes_server(executable_server):
     hook = executable_server / "etc/conda/activate.d/fail.bat"
@@ -515,7 +528,7 @@ def test_windows_activation_preserves_protocol_bytes_and_literal_arguments(
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout == b"READY\r\n" + protocol + b"EOF\r\n"
+    assert result.stdout == b"READY\n" + protocol + b"EOF\n"
     assert b"ACTIVATION STDOUT" in result.stderr
     assert b"ACTIVATION STDERR" in result.stderr
 

@@ -26,6 +26,16 @@ def test_read_bytes_allows_a_missing_parent_when_missing_is_allowed(tmp_path: Pa
     assert read_bytes(tmp_path / "absent" / "file", missing_ok=True) is None
 
 
+@pytest.mark.parametrize("missing_ok", [False, True])
+def test_read_bytes_rejects_a_regular_file_parent(tmp_path: Path, missing_ok: bool):
+    parent = tmp_path / "parent"
+    parent.write_bytes(b"original")
+
+    with pytest.raises(ValueError, match="Unsafe"):
+        read_bytes(parent / "config.json", missing_ok=missing_ok)
+    assert parent.read_bytes() == b"original"
+
+
 def test_read_and_write_bounds_preserve_original_file(tmp_path):
     path = tmp_path / "data"
     path.write_bytes(b"original")
@@ -279,6 +289,7 @@ def test_open_lock_rejects_a_redirected_parent_before_creating_it(tmp_path: Path
 def test_open_lock_rejects_redirected_leaf_and_hardlinked_lock(tmp_path: Path):
     target = tmp_path / "target"
     target.write_bytes(b"x")
+    original_mode = stat.S_IMODE(target.stat().st_mode)
     link = tmp_path / "state.lock"
     link.symlink_to(target)
     with pytest.raises(ValueError, match="Unsafe"):
@@ -293,7 +304,7 @@ def test_open_lock_rejects_redirected_leaf_and_hardlinked_lock(tmp_path: Path):
         assert target.read_bytes() == hardlink.read_bytes() == b"x"
         assert target.stat().st_nlink == 2
     else:
-        assert stat.S_IMODE(target.stat().st_mode) == 0o644
+        assert stat.S_IMODE(target.stat().st_mode) == original_mode
 
 
 @pytest.mark.skipif(on_win, reason="mkfifo is unavailable on Windows")

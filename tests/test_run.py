@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from conda.common.compat import on_win
 from pip._vendor.distlib.scripts import ScriptMaker
 
 from conda_mcp.run import (
@@ -58,7 +59,7 @@ def test_run_requires_a_stdio_server(tmp_path: Path):
         run(server, ())
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation")
+@pytest.mark.skipif(on_win, reason="POSIX activation")
 def test_run_preserves_literal_arguments_and_protocol_streams(
     install_package, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -93,7 +94,7 @@ def test_run_preserves_literal_arguments_and_protocol_streams(
     ]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation")
+@pytest.mark.skipif(on_win, reason="POSIX activation")
 def test_run_stops_when_activation_hook_fails(install_package, tmp_path: Path):
     prefix = install_package(
         manifest={
@@ -120,12 +121,11 @@ def test_trampoline_rejects_oversized_or_invalid_payload(
     monkeypatch.setenv("_CONDA_MCP_LAUNCH", "{}")
     with pytest.raises(ValueError, match="invalid launch payload"):
         LaunchPayload.decode(os.environ["_CONDA_MCP_LAUNCH"])
-    monkeypatch.setenv("_CONDA_MCP_LAUNCH", "x" * 65537)
     with pytest.raises(ValueError, match="too large"):
-        LaunchPayload.decode(os.environ["_CONDA_MCP_LAUNCH"])
+        LaunchPayload.decode("x" * 65537)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
 def test_wait_kills_process_group_after_interrupt():
     process = subprocess.Popen(
         ["/bin/sh", "-c", "trap '' TERM; sleep 30"], start_new_session=True
@@ -139,7 +139,7 @@ def test_wait_kills_process_group_after_interrupt():
             process.wait()
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
 def test_reap_waits_without_sigkill_when_process_group_has_exited(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -175,22 +175,22 @@ def test_reap_waits_without_sigkill_when_process_group_has_exited(
 def executable_server(install_package):
     """Install a recorded interpreter wrapper and a real protocol test server."""
     fixture = Path(__file__).with_name("fixtures") / "stdio_server.py"
-    relative = "Scripts/example.exe" if os.name == "nt" else "bin/python"
+    relative = "Scripts/example.exe" if on_win else "bin/python"
     prefix = install_package(
         manifest={
             "schema_version": 1,
             "name": "example",
             "description": "Example",
             "stdio": {
-                "command": "example.exe" if os.name == "nt" else "python",
-                "args": [] if os.name == "nt" else [str(fixture)],
+                "command": "example.exe" if on_win else "python",
+                "args": [] if on_win else [str(fixture)],
                 "environment": [{"name": "MCP_TEST_TOKEN", "required": True}],
             },
         },
         files={relative: b""},
     )
     executable = prefix / relative
-    if os.name == "nt":
+    if on_win:
         executable.unlink()
         source = prefix / "source"
         source.mkdir()
@@ -214,18 +214,19 @@ def test_protocol_streams_before_exit_and_receives_eof(executable_server):
         env={**os.environ, "MCP_TEST_TOKEN": ""},
     )
     try:
-        assert process.stdout.readline() == b"READY\n"
+        newline = b"\r\n" if on_win else b"\n"
+        assert process.stdout.readline() == b"READY" + newline
         assert process.poll() is None
         stdout, stderr = process.communicate(b'{"literal": "protocol"}\n', timeout=15)
         assert process.returncode == 0, stderr
-        assert stdout == b'{"literal": "protocol"}\nEOF\n'
+        assert stdout == b'{"literal": "protocol"}\nEOF' + newline
     finally:
         if process.poll() is None:
             process.kill()
             process.communicate(timeout=5)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX deactivation script")
+@pytest.mark.skipif(on_win, reason="POSIX deactivation script")
 def test_exit_status_survives_deactivation_and_argv_is_literal(
     executable_server, tmp_path
 ):
@@ -269,7 +270,7 @@ def test_missing_required_variable_fails_without_protocol_output(executable_serv
     assert "MCP_TEST_TOKEN" in result.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation script")
+@pytest.mark.skipif(on_win, reason="POSIX activation script")
 def test_noisy_activation_cannot_consume_protocol_input(executable_server):
     hook = executable_server / "etc/conda/activate.d/noisy.sh"
     hook.parent.mkdir(parents=True)
@@ -290,7 +291,7 @@ def test_noisy_activation_cannot_consume_protocol_input(executable_server):
     assert "STOLE INPUT" not in result.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX native process-group cleanup")
+@pytest.mark.skipif(on_win, reason="POSIX native process-group cleanup")
 def test_repeated_signals_terminate_ignoring_descendants(executable_server, tmp_path):
     pid_file = tmp_path / "child.pid"
     process = subprocess.Popen(
@@ -321,7 +322,7 @@ def test_repeated_signals_terminate_ignoring_descendants(executable_server, tmp_
             process.communicate(timeout=5)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation scripts")
+@pytest.mark.skipif(on_win, reason="POSIX activation scripts")
 @pytest.mark.parametrize("replacement", ["manifest", "provider", "executable"])
 def test_activation_cannot_replace_selected_inputs(executable_server, replacement):
     hook = executable_server / "etc/conda/activate.d/replace.sh"
@@ -347,7 +348,7 @@ def test_activation_cannot_replace_selected_inputs(executable_server, replacemen
     assert "STOLEN" not in result.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation quoting")
+@pytest.mark.skipif(on_win, reason="POSIX activation quoting")
 @pytest.mark.parametrize(
     "name",
     [
@@ -377,7 +378,7 @@ def test_activation_hook_paths_never_get_shell_evaluated(
 def test_unsafe_native_override_paths_are_rejected(tmp_path, monkeypatch):
     for name in ("CONDA_EXE", "TMPDIR", "CONDA_BAT", "CONDA_PREFIX"):
         with monkeypatch.context() as patch:
-            patch.setenv(name, "unsafe%path\n" if os.name == "nt" else "unsafe$(path)")
+            patch.setenv(name, "unsafe%path\n" if on_win else "unsafe$(path)")
             with pytest.raises(Exception, match="Unsafe path"):
                 _check_activation_paths(tmp_path)
 
@@ -385,9 +386,7 @@ def test_unsafe_native_override_paths_are_rejected(tmp_path, monkeypatch):
 def test_stacked_activation_paths_are_validated_before_wrapper_generation(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setenv(
-        "CONDA_PREFIX_1", "unsafe%path\n" if os.name == "nt" else "unsafe$(path)"
-    )
+    monkeypatch.setenv("CONDA_PREFIX_1", "unsafe%path\n" if on_win else "unsafe$(path)")
     with pytest.raises(Exception, match="Unsafe path"):
         _check_activation_paths(tmp_path)
 
@@ -433,7 +432,7 @@ def test_native_batch_wrapper_suppresses_autorun_and_checks_exit(tmp_path, monke
     assert "exit /b %_CONDA_MCP_EXIT%" in wrapper.read_text()
 
 
-@pytest.mark.skipif(os.name != "nt", reason="native Windows activation")
+@pytest.mark.skipif(not on_win, reason="native Windows activation")
 def test_windows_failing_activation_never_executes_server(executable_server):
     hook = executable_server / "etc/conda/activate.d/fail.bat"
     hook.parent.mkdir(parents=True)
@@ -449,7 +448,7 @@ def test_windows_failing_activation_never_executes_server(executable_server):
     assert "Activation script" in result.stderr
 
 
-@pytest.mark.skipif(os.name != "nt", reason="native Windows activation")
+@pytest.mark.skipif(not on_win, reason="native Windows activation")
 def test_windows_activation_preserves_protocol_bytes_and_literal_arguments(
     executable_server,
 ):

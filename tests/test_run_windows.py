@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 
@@ -38,7 +37,7 @@ class _Process:
     ],
 )
 def test_windows_reap_closes_job_and_waits_when_termination_fails(monkeypatch, error):
-    monkeypatch.setattr(runner, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(runner, "on_win", True)
     process = _Process(error)
 
     with pytest.raises(type(error)) as caught:
@@ -49,7 +48,7 @@ def test_windows_reap_closes_job_and_waits_when_termination_fails(monkeypatch, e
 
 
 def test_windows_reap_preserves_termination_error_when_close_and_wait_fail(monkeypatch):
-    monkeypatch.setattr(runner, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(runner, "on_win", True)
     error = OSError(5, "terminate")
     process = _Process(error)
 
@@ -74,7 +73,7 @@ def test_windows_reap_preserves_termination_error_when_close_and_wait_fail(monke
 
 
 def test_windows_reap_uses_remaining_cleanup_budget(monkeypatch):
-    monkeypatch.setattr(runner, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(runner, "on_win", True)
     clock = iter((100.0, 104.0))
     monkeypatch.setattr(runner.time, "monotonic", lambda: next(clock))
     process = _Process(OSError(5, "terminate"))
@@ -88,7 +87,7 @@ def test_windows_reap_uses_remaining_cleanup_budget(monkeypatch):
 
 
 def test_windows_wait_preserves_interruption_and_restores_handlers(monkeypatch):
-    monkeypatch.setattr(runner, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(runner, "on_win", True)
     error = KeyboardInterrupt()
     process = _Process(OSError(5, "terminate"))
     restored = []

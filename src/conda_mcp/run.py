@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 from conda import CondaError
 from conda.base.context import context
+from conda.common.compat import on_win
 from conda.utils import wrap_subprocess_call
 
 from . import _launch_windows
@@ -164,7 +165,7 @@ class LaunchPayload:
 
     def restore_protocol(self) -> None:
         """Give only the validated server access to the saved protocol streams."""
-        if os.name == "nt":
+        if on_win:
             _launch_windows.restore_protocol(
                 {
                     "stdin_handle": self.stdin_handle,
@@ -221,7 +222,7 @@ def run(server: Server, arguments: tuple[str, ...]) -> int:
             if key not in {"BASH_ENV", "ENV"} and not key.startswith("_CONDA_MCP_")
         }
         environment[_PAYLOAD] = payload
-        if os.name == "nt":
+        if on_win:
             process = _launch_windows.launch(command, environment, stdin, stdout)
         else:
             process = subprocess.Popen(
@@ -263,7 +264,8 @@ def _activation_wrapper(prefix: Path, host: Path) -> tuple[Path, list[str]]:
                 (
                     i
                     for i, line in enumerate(lines)
-                    if line.startswith("CALL ") and " activate " in line
+                    if line.removeprefix("@").startswith("CALL ")
+                    and " activate " in line
                 ),
                 None,
             )
@@ -293,7 +295,7 @@ def _activation_wrapper(prefix: Path, host: Path) -> tuple[Path, list[str]]:
                 (
                     i
                     for i in range(launch_line + 1, len(lines))
-                    if lines[i].lower().startswith("exit /b")
+                    if lines[i].removeprefix("@").lower().startswith("exit /b")
                 ),
                 None,
             )
@@ -343,7 +345,7 @@ def _check_activation_paths(prefix: Path, *paths: Path | str) -> None:
         for candidate in candidates
         for phase in ("activate", "deactivate")
         for hook in (candidate / "etc" / "conda" / f"{phase}.d").glob(
-            "*.bat" if os.name == "nt" else "*.sh"
+            "*.bat" if on_win else "*.sh"
         )
     ]
     values: tuple[Path | str | None, ...] = (
@@ -359,10 +361,7 @@ def _check_activation_paths(prefix: Path, *paths: Path | str) -> None:
     )
     if any(
         value is not None
-        and any(
-            char in str(value)
-            for char in ('%\r\n"^' if os.name == "nt" else _UNSAFE_POSIX)
-        )
+        and any(char in str(value) for char in ('%\r\n"^' if on_win else _UNSAFE_POSIX))
         for value in values
     ):
         raise CondaError("Unsafe path for conda activation.")
@@ -379,7 +378,7 @@ def _wait_for_process(
         if not interrupted:
             interrupted.append(signum)
             try:
-                if os.name == "nt":
+                if on_win:
                     process.terminate()
                 else:
                     os.killpg(process.pid, signum)
@@ -393,7 +392,7 @@ def _wait_for_process(
             handlers[sig] = signal.signal(sig, forward)
         while process.poll() is None:
             if interrupted:
-                cleaned = os.name == "nt"
+                cleaned = on_win
                 _reap_after_interrupt(process, grace)
                 cleaned = True
             else:
@@ -407,7 +406,7 @@ def _wait_for_process(
         raise
     finally:
         try:
-            if os.name == "nt":
+            if on_win:
                 if not cleaned and (primary is not None or process.poll() is None):
                     try:
                         _reap_after_interrupt(process, grace)
@@ -437,7 +436,7 @@ def _reap_after_interrupt(
     process: subprocess.Popen[bytes] | _launch_windows._Process, grace: float
 ) -> None:
     """Kill only the wrapper's process group after its grace period expires."""
-    if os.name == "nt":
+    if on_win:
         deadline = time.monotonic() + 5
         primary: BaseException | None = None
         try:

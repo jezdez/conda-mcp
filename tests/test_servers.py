@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -535,7 +536,8 @@ def test_executable_resolution_uses_native_directory_before_other_platform_path(
 
     [server] = discover(prefix)
 
-    assert server.resolve_executable() == prefix / "bin/example"
+    expected = "Scripts/example.exe" if os.name == "nt" else "bin/example"
+    assert server.resolve_executable() == prefix / expected
 
 
 def test_executable_resolution_rejects_duplicate_selected_path_owners(

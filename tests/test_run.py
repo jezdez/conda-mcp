@@ -99,15 +99,11 @@ def test_run_stops_when_activation_hook_fails(install_package, tmp_path: Path):
     assert run(server, ()) == 17
 
 
-def test_trampoline_rejects_oversized_or_invalid_payload(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setenv("_CONDA_MCP_LAUNCH", "{}")
+def test_trampoline_rejects_oversized_or_invalid_payload():
     with pytest.raises(ValueError, match="invalid launch payload"):
-        LaunchPayload.decode(os.environ["_CONDA_MCP_LAUNCH"])
-    monkeypatch.setenv("_CONDA_MCP_LAUNCH", "x" * 65537)
+        LaunchPayload.decode("{}")
     with pytest.raises(ValueError, match="too large"):
-        LaunchPayload.decode(os.environ["_CONDA_MCP_LAUNCH"])
+        LaunchPayload.decode("x" * 65537)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
@@ -416,6 +412,23 @@ def test_native_batch_wrapper_suppresses_autorun_and_checks_exit(tmp_path, monke
     assert 'set "_CONDA_MCP_EXIT=%ERRORLEVEL%"' in wrapper.read_text()
     assert 'CALL "C:\\Conda\\condabin\\conda.bat" deactivate' in wrapper.read_text()
     assert "exit /b %_CONDA_MCP_EXIT%" in wrapper.read_text()
+
+
+def test_conda_batch_wrapper_preserves_activation_and_deactivates(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr("conda.utils.on_win", True)
+    monkeypatch.setattr("conda.utils.get_comspec", lambda: "cmd.exe")
+    wrapper, command = _activation_wrapper(tmp_path, Path(sys.executable))
+    try:
+        source = wrapper.read_text(encoding="utf-8")
+        assert "/d" in command and "/v:off" in command
+        assert "@CALL " in source and " activate " in source
+        assert "@IF %ERRORLEVEL% NEQ 0 EXIT /b %ERRORLEVEL%" in source
+        assert source.index("-I -m conda_mcp._launch") < source.index(" deactivate")
+        assert source.endswith("exit /b %_CONDA_MCP_EXIT%\n")
+    finally:
+        wrapper.unlink()
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows activation")

@@ -263,7 +263,8 @@ def _activation_wrapper(prefix: Path, host: Path) -> tuple[Path, list[str]]:
                 (
                     i
                     for i, line in enumerate(lines)
-                    if line.startswith("CALL ") and " activate " in line
+                    if line.removeprefix("@").startswith("CALL ")
+                    and " activate " in line
                 ),
                 None,
             )
@@ -293,7 +294,7 @@ def _activation_wrapper(prefix: Path, host: Path) -> tuple[Path, list[str]]:
                 (
                     i
                     for i in range(launch_line + 1, len(lines))
-                    if lines[i].lower().startswith("exit /b")
+                    if lines[i].removeprefix("@").lower().startswith("exit /b")
                 ),
                 None,
             )

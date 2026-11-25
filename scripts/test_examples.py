@@ -171,9 +171,11 @@ def _request(
         process.stdin.close()
         stderr = process.stderr.read() if process.stderr else ""
         process.wait(timeout=60)
-    except BaseException:
+    except BaseException as exc:
         process.kill()
-        process.communicate(timeout=10)
+        _, stderr = process.communicate(timeout=10)
+        if stderr:
+            exc.add_note(stderr)
         raise
     assert process.returncode == 0, stderr
     return received

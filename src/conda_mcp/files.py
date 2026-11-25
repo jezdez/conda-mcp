@@ -405,6 +405,7 @@ def _open_windows_parents(path: Path, *, create: bool) -> list[int]:
                 info = _windows_info(handle)
                 if (
                     info.dwFileAttributes & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                    or not info.dwFileAttributes & stat.FILE_ATTRIBUTE_DIRECTORY
                     or _kernel32.GetFileType(handle) != _FILE_TYPE_DISK
                 ):
                     raise ValueError("Unsafe redirected path.")

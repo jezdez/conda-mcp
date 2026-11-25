@@ -42,11 +42,13 @@ def main() -> int:
             flush=True,
         )
     else:
-        print("READY", flush=True)
+        sys.stdout.buffer.write(b"READY\n")
+        sys.stdout.buffer.flush()
         for line in sys.stdin.buffer:
             sys.stdout.buffer.write(line)
             sys.stdout.buffer.flush()
-        print("EOF", flush=True)
+        sys.stdout.buffer.write(b"EOF\n")
+        sys.stdout.buffer.flush()
     return int(os.environ.get("MCP_TEST_EXIT", "0"))
 
 

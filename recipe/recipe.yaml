@@ -39,10 +39,12 @@ requirements:
     - anyio >=4.9
     - jsonschema >=4.20
     - mcp >=2,<3
+    - pywin32-on-windows >=0.1.0
     - rich >=13
     - tomlkit >=0.13
   run_constraints:
     - conda-cli-mcp <0a0
+    - pywin32 >=311
 
 tests:
   - python:

@@ -11,7 +11,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from conda import CondaError
 from conda.base.context import context
@@ -387,11 +387,13 @@ def _wait_for_process(
                 pass
 
     handlers = {}
+    primary: BaseException | None = None
     try:
         for sig in (signal.SIGINT, signal.SIGTERM):
             handlers[sig] = signal.signal(sig, forward)
         while process.poll() is None:
             if interrupted:
+                cleaned = os.name == "nt"
                 _reap_after_interrupt(process, grace)
                 cleaned = True
             else:
@@ -400,20 +402,35 @@ def _wait_for_process(
         return (
             128 + interrupted[0] if interrupted else (128 - code if code < 0 else code)
         )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        if os.name == "nt":
-            if process.poll() is None:
-                process.kill()
-                process.wait(timeout=5)
-        elif not cleaned:
-            try:
-                if not interrupted:
-                    os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            _reap_after_interrupt(process, grace)
-        for sig, handler in handlers.items():
-            signal.signal(sig, handler)
+        try:
+            if os.name == "nt":
+                if not cleaned and (primary is not None or process.poll() is None):
+                    try:
+                        _reap_after_interrupt(process, grace)
+                    except BaseException as cleanup:
+                        if primary is None:
+                            raise
+                        primary.add_note(_cleanup_note("runner", cleanup))
+            elif not cleaned:
+                try:
+                    if not interrupted:
+                        os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                _reap_after_interrupt(process, grace)
+        finally:
+            for sig, handler in handlers.items():
+                signal.signal(sig, handler)
+
+
+def _cleanup_note(operation: str, error: BaseException) -> str:
+    code = getattr(error, "winerror", None) or getattr(error, "errno", None)
+    detail = f" (code {code})" if isinstance(code, int) else ""
+    return f"Windows {operation} cleanup: {type(error).__name__}{detail}"
 
 
 def _reap_after_interrupt(
@@ -421,8 +438,29 @@ def _reap_after_interrupt(
 ) -> None:
     """Kill only the wrapper's process group after its grace period expires."""
     if os.name == "nt":
-        process.kill()
-        process.wait(timeout=5)
+        deadline = time.monotonic() + 5
+        primary: BaseException | None = None
+        try:
+            process.kill()
+        except BaseException as error:
+            primary = error
+        try:
+            # Closing the job still kills descendants if explicit termination failed.
+            cast(_launch_windows._Process, process)._conda_mcp_close_job()
+        except BaseException as error:
+            if primary is None:
+                primary = error
+            else:
+                primary.add_note(_cleanup_note("job close", error))
+        try:
+            process.wait(timeout=max(0, deadline - time.monotonic()))
+        except BaseException as error:
+            if primary is None:
+                primary = error
+            else:
+                primary.add_note(_cleanup_note("process reap", error))
+        if primary is not None:
+            raise primary
         return
     if process.pid == os.getpgrp():
         raise CondaError("Refusing to signal the caller's process group.")

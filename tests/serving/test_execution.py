@@ -348,23 +348,30 @@ async def test_execute_timeout_bounds_inherited_pipe_drain(
 @pytest.mark.skipif(on_win, reason="POSIX process groups")
 @pytest.mark.anyio
 async def test_successful_command_closes_inherited_pipes_promptly(
-    fake_conda: tuple[CondaExecutor, Path],
     tmp_path: Path,
 ) -> None:
-    executor, script = fake_conda
-    survived = tmp_path / "inherited-descendant-survived"
-    started = time.monotonic()
-
-    result = await executor.execute(
-        [str(script), "inherited-pipes", str(survived)], timeout_seconds=1
+    executor = CondaExecutor(Path(sys.executable), timeout_seconds=5)
+    started = tmp_path / "inherited-descendant-started"
+    script = tmp_path / "inherited_pipes.py"
+    script.write_text(
+        "import subprocess, sys, time\n"
+        "from pathlib import Path\n"
+        "if len(sys.argv) > 2:\n"
+        "    Path(sys.argv[1]).touch()\n"
+        "    time.sleep(60)\n"
+        "else:\n"
+        "    subprocess.Popen([sys.executable, __file__, sys.argv[1], 'child'])\n"
+        "    while not Path(sys.argv[1]).exists():\n"
+        "        time.sleep(0.01)\n"
     )
-    elapsed = time.monotonic() - started
-    await asyncio.sleep(0.55)
 
+    result = await executor.execute([str(script), str(started)])
+
+    assert started.exists()
     assert result.exit_code == 0
     assert not result.timed_out
-    assert elapsed < 0.4
-    assert not survived.exists()
+    assert not result.stdout_truncated
+    assert not result.stderr_truncated
 
 
 @pytest.mark.skipif(on_win, reason="POSIX process groups")

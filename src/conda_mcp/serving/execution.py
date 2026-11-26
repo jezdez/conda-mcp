@@ -376,10 +376,18 @@ class CondaExecutor:
                     with suppress(BrokenPipeError, ConnectionResetError):
                         await process.stdin.wait_closed()
 
+            async def wait_for_exit() -> int:
+                if not on_win:
+                    # Python 3.11's wait() also waits for inherited pipes to close.
+                    # Observe the root exit first so we can stop its descendants.
+                    while process.returncode is None:
+                        await asyncio.sleep(0.01)
+                return await process.wait()
+
             stdout_task = asyncio.create_task(capture(process.stdout))
             stderr_task = asyncio.create_task(capture(process.stderr))
             input_task = asyncio.create_task(send_input())
-            wait_task = asyncio.create_task(process.wait())
+            wait_task = asyncio.create_task(wait_for_exit())
             tasks = (wait_task, stdout_task, stderr_task, input_task)
 
             async def stop_process() -> tuple[float | None, BaseException | None]:

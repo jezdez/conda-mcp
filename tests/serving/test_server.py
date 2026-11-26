@@ -139,6 +139,28 @@ async def test_execute_tool_returns_structured_result(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("stdout", ['{"value": 1e400}', "[" * 500 + "0" + "]" * 500])
+async def test_unrepresentable_parsed_json_keeps_successful_protocol_result(
+    fake_conda: tuple[CondaExecutor, Path], stdout: str
+) -> None:
+    executor, script = fake_conda
+    server = CondaMCPServer(
+        executor,
+        policy=SafetyPolicy(allow_write=True, allow_exec=True),
+    )
+
+    async with Client(server.server) as client:
+        result = await client.call_tool(
+            EXECUTE_TOOL_NAME, {"argv": [str(script), "literal", stdout]}
+        )
+
+    assert not result.is_error
+    assert result.structured_content["exit_code"] == 0
+    assert result.structured_content["stdout"] == stdout
+    assert result.structured_content["parsed_json"] is None
+
+
+@pytest.mark.anyio
 async def test_execute_tool_validates_arguments(
     fake_conda: tuple[CondaExecutor, Path],
 ) -> None:

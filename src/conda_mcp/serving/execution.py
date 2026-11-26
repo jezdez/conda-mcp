@@ -35,6 +35,7 @@ class CompletionQueryError(RuntimeError):
 
 
 _WINDOWS_CLEANUP_SECONDS = 5
+_MAX_PARSED_JSON_DEPTH = 64
 
 
 def _add_cleanup_note(error: BaseException, operation: str, detail: object) -> None:
@@ -506,9 +507,29 @@ class CondaExecutor:
             def reject_constant(value: str) -> None:
                 raise ValueError(value)
 
+            def finite_float(value: str) -> float:
+                number = float(value)
+                if not math.isfinite(number):
+                    raise ValueError(value)
+                return number
+
             try:
-                parsed_json = json.loads(stdout, parse_constant=reject_constant)
-            except (json.JSONDecodeError, ValueError):
+                candidate = json.loads(
+                    stdout,
+                    parse_constant=reject_constant,
+                    parse_float=finite_float,
+                )
+                pending_values = [(candidate, 0)]
+                while pending_values:
+                    value, depth = pending_values.pop()
+                    if isinstance(value, (dict, list)):
+                        if depth >= _MAX_PARSED_JSON_DEPTH:
+                            break
+                        children = value.values() if isinstance(value, dict) else value
+                        pending_values.extend((child, depth + 1) for child in children)
+                else:
+                    parsed_json = candidate
+            except (json.JSONDecodeError, ValueError, RecursionError):
                 pass
 
         return ExecutionResult(

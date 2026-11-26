@@ -194,6 +194,8 @@ async def test_execute_supports_cwd_and_stdin(
         ("NaN", None),
         ("Infinity", None),
         ("-Infinity", None),
+        ('{"value": 1e400}', None),
+        ("[" * 80 + "0" + "]" * 80, None),
     ],
 )
 async def test_execute_parses_exactly_one_json_document(
@@ -345,9 +347,7 @@ async def test_successful_command_reaps_child_after_pipes_close(
     executor, script = fake_conda
     survived = tmp_path / "successful-descendant-survived"
 
-    result = await executor.execute(
-        [str(script), "closed-pipes-child", str(survived)]
-    )
+    result = await executor.execute([str(script), "closed-pipes-child", str(survived)])
     await asyncio.sleep(0.7)
 
     assert result.exit_code == 0

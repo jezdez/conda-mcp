@@ -67,11 +67,21 @@ Follow {doc}`how-to/migrate-from-conda-cli-mcp` to replace the old launcher and 
 
 The {ref}`registration recording <demo-registration>` includes the commands in text.
 :::
+
+:::{grid-item-card} Prior art and design
+:link: explanation/prior-art
+:link-type: doc
+
+Compare conda-mcp with other MCP and conda tools.
+:::
+
+:::{grid-item-card} Migrate from conda-cli-mcp
+:link: how-to/migrate-from-conda-cli-mcp
+:link-type: doc
+
+Update a client entry for the merged `conda mcp serve` command.
+:::
 ::::
-
-## Prior art
-
-The {doc}`explanation/prior-art` compares conda-mcp with other MCP tools and conda ecosystem projects. It explains the merged CLI server, package-owned declarations, and the limits of activation, registration, and reproducibility.
 
 ```{toctree}
 :hidden:

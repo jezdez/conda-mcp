@@ -20,7 +20,7 @@ These controls keep activation output out of the protocol and bound normal proce
 
 ## Relationship to other tools
 
-See {doc}`prior-art` for the relationship to conda-cli-mcp, conda-meta-mcp, conda-global, and conda-exec, and the division between package management and MCP execution.
+See {doc}`prior-art` for comparisons with other MCP and conda tools.
 
 [FastMCP](https://gofastmcp.com/docs/cli/install-mcp) generates client configuration and provides commands for live tool discovery and invocation. Conda-mcp renders entries from recorded package declarations instead of importing server code. The live demo uses FastMCP's existing client commands to exercise those entries.
 

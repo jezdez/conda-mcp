@@ -34,7 +34,7 @@ The advantage is smaller for a single Python server already served well by a fra
 | Launch a selected packaged server | `conda mcp run SERVER` |
 | Expose a conda installation through MCP | `conda mcp serve` |
 
-Bare `conda mcp` displays help. The merged package does not install `ccm`, and the old bare-server invocation is not an alias for `serve`. Client entries can register the packaged `conda-cli` declaration or launch the installation's absolute conda executable with `mcp serve`. Keep the required permission flags and limits. The server always serves the installation that launched it, so there is no path override. The old and new plugins cannot share one tools environment because both register `mcp`. See {doc}`../how-to/migrate-from-conda-cli-mcp` for the migration steps.
+Bare `conda mcp` displays help. The merged package does not install `ccm`, and the old bare-server invocation is not an alias for `serve`. Client entries can register the packaged `conda-cli` declaration or launch the installation's absolute Python executable with `-I -m conda_mcp._stdio serve`. Keep the required permission flags and limits. The server always serves the installation that launched it, so there is no path override. The old and new plugins cannot share one tools environment because both register `mcp`. See {doc}`../how-to/migrate-from-conda-cli-mcp` for the migration steps.
 
 [Conda-meta-mcp](https://github.com/conda-incubator/conda-meta-mcp) remains an independent server for ecosystem queries such as package search, import/file mappings, PyPI-to-conda mapping, CLI help, and dependency queries. It provides the standalone `cmm run` and `cmm mcp-json` commands, with no conda subcommand registration. Read-only metadata queries can contact services and use caches. They are different from conda-mcp's local installed-declaration scan, and conda-meta-mcp is not a dependency needed to use that scan or the CLI server.
 
@@ -76,13 +76,13 @@ The CLI server has a different execution path after startup. It invokes conda co
 
 The CLI server defaults to read-only operations. Mutations require `--allow-write`, and arbitrary execution requires `--allow-exec`. Enabling execution does not imply permission for conda-managed mutations. Client approval and server startup policy are separate controls.
 
-The built-in manager's passive operations remain passive when exposed through MCP. Registration writes require write permission, and launching a packaged server requires execution permission. `serve` is not an automatically callable generated tool that starts another long-lived server. Raw execution is still arbitrary execution, so excluding that generated tool is not a general recursion or sandbox guarantee.
+The built-in manager's passive operations remain passive when exposed through MCP. Registration writes require write permission. Both `run` and `serve` start stdio servers, so neither is offered as a generated tool. Raw execution still requires `--allow-exec` and permits arbitrary execution, so excluding these generated tools does not prevent recursion or provide a sandbox.
 
 Permission checks follow command paths and options. Package ownership does not make server code safe to execute.
 
 ### Provenance, availability, and protocol health answer different questions
 
-A declaration receipt records the provider and configuration accepted at registration. Installed package records attribute files to packages. Executable checks determine whether a recorded launch target is available. A live client session determines whether a server initialises and responds. None of these signals substitutes for the others.
+A declaration receipt records the provider and configuration accepted at registration. Installed package records attribute files to packages. `registry` reports receipt and declaration provenance. Resolving an executable separately checks whether its recorded launch target is available. A live client session determines whether a server initialises and responds. None of these signals substitutes for the others.
 
 For example, an unchanged declaration provider does not establish that the package owning its executable is unchanged. It also says nothing about the tools interpreter or every dependency in the source environment. Provenance and availability diagnostics must not be presented as a live health check.
 
@@ -96,7 +96,7 @@ A receipt or package-name check does not freeze the environment. Exact package s
 
 ### Client policy is not package metadata
 
-A package-derived command or URL does not own a client's disablement, approval, tool filters, or timeout policy. Updating a generated connection must preserve those decisions and refuse ambiguous edits. Removing an entry and registering it again is not a policy-preserving refresh: the replacement cannot infer settings that were deleted.
+A package-derived command or URL does not own a client's disablement, approval, tool filters, or timeout policy. The current `register` command refuses edited entries. A refresh operation would need to preserve those decisions and refuse ambiguous edits. Removing an entry and registering it again is not a policy-preserving refresh: the replacement cannot infer settings that were deleted.
 
 `render` is the alternative when a client configuration is outside the supported write format. Kilo can use commented or layered configuration that the strict-JSON writer deliberately leaves untouched. A selected file and its receipt do not reveal the client's effective configuration across all layers.
 

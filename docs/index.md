@@ -53,7 +53,7 @@ Ship a Python server, then adapt the recipe for Node, wrappers, or remote endpoi
 
 ::::
 
-For the reasons behind discovery and permissions, read {doc}`explanation/serving`. {doc}`explanation/lifecycle` covers package ownership, activation, and process cleanup. The {doc}`reference/glossary` defines terms used throughout the guides, and the {ref}`genindex` lists terms and command options alphabetically.
+For the reasons behind discovery and permissions, read {doc}`explanation/serving`. {doc}`explanation/lifecycle` covers package ownership, activation, and process cleanup. {doc}`explanation/prior-art` compares conda-mcp with other MCP and conda tools. The {doc}`reference/glossary` defines terms used throughout the guides, and the {ref}`genindex` lists terms and command options alphabetically.
 
 :::{admonition} Moving from conda-cli-mcp
 :class: seealso
@@ -66,20 +66,6 @@ Follow {doc}`how-to/migrate-from-conda-cli-mcp` to replace the old launcher and 
 :alt: Terminal recording of discovering a packaged FastMCP server and creating and removing its project-local Codex registration.
 
 The {ref}`registration recording <demo-registration>` includes the commands in text.
-:::
-
-:::{grid-item-card} Prior art and design
-:link: explanation/prior-art
-:link-type: doc
-
-Compare conda-mcp with other MCP and conda tools.
-:::
-
-:::{grid-item-card} Migrate from conda-cli-mcp
-:link: how-to/migrate-from-conda-cli-mcp
-:link-type: doc
-
-Update a client entry for the merged `conda mcp serve` command.
 :::
 ::::
 

@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import asdict, dataclass, fields, replace
+from datetime import date, datetime, time
 from pathlib import Path, PurePosixPath
 
 from conda import CondaError
@@ -18,17 +19,45 @@ from .servers import discover
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
+def _typed_toml_value(value: object) -> object:
+    if isinstance(value, datetime):
+        return ("datetime", value.isoformat())
+    if isinstance(value, date):
+        return ("date", value.isoformat())
+    if isinstance(value, time):
+        return ("time", value.isoformat())
+    if isinstance(value, dict):
+        return (
+            "table",
+            tuple(
+                (key, _typed_toml_value(item)) for key, item in sorted(value.items())
+            ),
+        )
+    if isinstance(value, (list, tuple)):
+        return ("array", tuple(_typed_toml_value(item) for item in value))
+    if value is None:
+        return ("null",)
+    if isinstance(value, bool):
+        return ("boolean", value)
+    if isinstance(value, int):
+        return ("integer", value)
+    if isinstance(value, float):
+        return ("number", value)
+    if isinstance(value, str):
+        return ("string", value)
+    raise TypeError(f"Unsupported entry value: {type(value).__name__}")
+
+
 def fingerprint(entry: object) -> str:
     """Hash all entry fields, independent of JSON formatting."""
-    return hashlib.sha256(
-        json.dumps(
-            entry,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    encoder = json.JSONEncoder(
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+    try:
+        payload = encoder.encode(entry)
+    except TypeError:
+        payload = "toml:" + encoder.encode(_typed_toml_value(entry))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)

@@ -429,6 +429,7 @@ def main() -> None:
                 "--package",
                 "example-mcp-wrapper",
                 "wrapper-example",
+                "--",
                 "--version",
             ],
             cwd=wrapper,

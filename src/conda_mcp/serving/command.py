@@ -56,9 +56,17 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
         }[argument.value_type]
     }
     if (
-        not argument.flags
-        and argument.value_type == "string"
-        and argument.nargs != "remainder"
+        argument.value_type == "string"
+        and argument.nargs
+        not in (
+            "parser",
+            "remainder",
+        )
+        and (
+            not argument.flags
+            or argument.nargs not in (None, "?")
+            or argument.action is ActionKind.EXTEND_CONST
+        )
     ):
         scalar["pattern"] = "^(?!-)"
     if argument.choices:
@@ -127,6 +135,7 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
 
 def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
     """Compile one schema-validated argument value into canonical argv tokens."""
+
     def token(item: Any) -> str:
         return str(int(item)) if argument.value_type == "integer" else str(item)
 
@@ -135,34 +144,45 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
         argument.flags[0] if argument.flags else None,
     )
 
+    def scalar_tokens(item: Any) -> tuple[str, ...]:
+        value_token = token(item)
+        if flag is None:
+            return (value_token,)
+        if value_token.startswith("-"):
+            return (f"{flag}={value_token}",)
+        return (flag, value_token)
+
     match argument.action:
         case ActionKind.STORE:
             prefix = (flag,) if flag else ()
             if argument.nargs == "?" and value is None:
                 return prefix
             if argument.nargs in (None, "?"):
-                return (*prefix, token(value))
+                return scalar_tokens(value)
             return (*prefix, *(token(item) for item in value))
         case ActionKind.APPEND:
             tokens: list[str] = []
             for occurrence in value:
-                if flag:
-                    tokens.append(flag)
                 if argument.nargs == "?" and occurrence is None:
+                    if flag:
+                        tokens.append(flag)
                     continue
                 if argument.nargs in (None, "?"):
-                    tokens.append(token(occurrence))
+                    tokens.extend(scalar_tokens(occurrence))
                 else:
+                    if flag:
+                        tokens.append(flag)
                     tokens.extend(token(item) for item in occurrence)
             return tuple(tokens)
         case ActionKind.EXTEND:
             tokens = []
             if argument.nargs in (None, "?"):
                 for item in value:
-                    if flag:
-                        tokens.append(flag)
-                    if item is not None:
-                        tokens.append(token(item))
+                    if item is None:
+                        if flag:
+                            tokens.append(flag)
+                    else:
+                        tokens.extend(scalar_tokens(item))
                 return tuple(tokens)
             if flag:
                 tokens.append(flag)

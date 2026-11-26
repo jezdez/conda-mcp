@@ -158,6 +158,49 @@ def test_integral_json_numbers_round_trip_through_argparse(
 
 
 @pytest.mark.parametrize(
+    ("options", "value", "expected", "parsed"),
+    [
+        ({}, "--message", ("--value=--message",), "--message"),
+        ({"nargs": "?"}, "--message", ("--value=--message",), "--message"),
+        (
+            {"action": "append"},
+            ["--message"],
+            ("--value=--message",),
+            ["--message"],
+        ),
+        (
+            {"action": "extend"},
+            ["--message"],
+            ("--value=--message",),
+            list("--message"),
+        ),
+    ],
+)
+def test_dash_prefixed_scalar_option_values_round_trip_through_argparse(
+    options, value, expected, parsed
+) -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", **options)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    compiled = tool.compile({"value": value})
+
+    assert compiled == ("example", *expected)
+    assert parser.parse_args(compiled).value == parsed
+
+
+def test_dash_prefixed_multi_value_option_is_rejected_before_argparse() -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", nargs=2)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    with pytest.raises(ValidationError):
+        tool.compile({"value": ["plain", "--message"]})
+
+
+@pytest.mark.parametrize(
     ("options", "value", "invalid", "argv", "parsed"),
     [
         ({"action": "append", "required": True}, ["a"], [], ("--value", "a"), ["a"]),
@@ -370,7 +413,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
                 "type": "array",
                 "items": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {"type": "string", "pattern": "^(?!-)"},
                     "minItems": 2,
                     "maxItems": 2,
                 },
@@ -384,7 +427,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
             make_argument(ActionKind.EXTEND, nargs="+"),
             {
                 "type": "array",
-                "items": {"type": "string"},
+                "items": {"type": "string", "pattern": "^(?!-)"},
                 "minItems": 1,
             },
         ),
@@ -398,7 +441,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
         ),
         (
             make_argument(ActionKind.EXTEND_CONST),
-            {"type": "array", "items": {"type": "string"}},
+            {"type": "array", "items": {"type": "string", "pattern": "^(?!-)"}},
         ),
         (
             make_argument(ActionKind.COUNT),
@@ -650,7 +693,7 @@ def test_extend_const_emits_one_flag_for_an_empty_value_list() -> None:
 
     assert tool.input_schema["properties"]["value"] == {
         "type": "array",
-        "items": {"type": "string"},
+        "items": {"type": "string", "pattern": "^(?!-)"},
     }
     assert tool.compile({"value": []}) == ("example", "--value")
     assert tool.compile({"value": ["one", "two"]}) == (

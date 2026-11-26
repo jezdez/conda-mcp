@@ -142,10 +142,17 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.anyio
-async def test_plugin_fingerprint_probe_runs_in_child(
-    fake_conda, monkeypatch, tmp_path
-) -> None:
-    executor, _ = fake_conda
+async def test_plugin_fingerprint_probe_runs_in_child(monkeypatch, tmp_path) -> None:
+    executor = CondaExecutor(Path(sys.executable))
+    execute_process = CondaExecutor._execute_process
+    result = None
+
+    async def capture_result(*args, **kwargs):
+        nonlocal result
+        result = await execute_process(*args, **kwargs)
+        return result
+
+    monkeypatch.setattr(CondaExecutor, "_execute_process", capture_result)
     expected = plugin_fingerprint(*discover_plugins())
     shadow = tmp_path / "conda_mcp" / "serving"
     shadow.mkdir(parents=True)
@@ -164,7 +171,12 @@ async def test_plugin_fingerprint_probe_runs_in_child(
         "conda_mcp.serving.discovery.discover_plugins", fail_parent_discovery
     )
 
-    assert await executor.probe_plugin_fingerprint() == expected
+    try:
+        fingerprint = await executor.probe_plugin_fingerprint()
+    except RuntimeError as error:
+        pytest.fail(f"{error}: {result!r}")
+
+    assert fingerprint == expected
     assert not marker.exists()
 
 

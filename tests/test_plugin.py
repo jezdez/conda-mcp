@@ -112,6 +112,26 @@ def test_run_preserves_remainder(parser):
     assert args.arguments == ["", "--json", "a b"]
 
 
+@pytest.mark.parametrize("command", ["run", "register", "render"])
+@pytest.mark.parametrize("after_name", [False, True])
+@pytest.mark.parametrize("tail", [[], ["", "--json", "-n", "literal", "--", "a b"]])
+def test_server_arguments_follow_explicit_separator(parser, command, after_name, tail):
+    options = ["-n", "servers"]
+    if command != "run":
+        options += ["--client", "codex"]
+    arguments = ["example", *options] if after_name else [*options, "example"]
+    args = parser.parse_args([command, *arguments, "--", *tail])
+    assert args.name == "servers"
+    assert args.server == "example"
+    assert args.arguments == tail
+
+
+def test_run_rejects_server_arguments_without_separator(parser):
+    with pytest.raises(SystemExit) as error:
+        parser.parse_args(["run", "example", "unexpected"])
+    assert error.value.code == 2
+
+
 def test_registry_defaults_to_existing_client_targets(parser):
     args = parser.parse_args(["registry"])
     assert args.client is None

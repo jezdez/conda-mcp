@@ -470,7 +470,7 @@ def _metavar(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
 
 
 def _argument_id(action: argparse.Action, used_ids: set[str]) -> str:
-    if action.option_strings:
+    if action.option_strings and action.option_strings != ["--"]:
         preferred = next(
             (option[2:] for option in action.option_strings if option.startswith("--")),
             action.option_strings[0].lstrip("-"),

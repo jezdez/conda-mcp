@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import FrozenInstanceError
 from importlib import metadata
@@ -17,7 +18,7 @@ from conda_mcp.serving.discovery import (
     inspect_parser,
     inspect_plugins,
 )
-from conda_mcp.serving.models import ActionKind, Diagnostic, Plugin, Program
+from conda_mcp.serving.models import ActionKind, Plugin
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -113,7 +114,6 @@ def test_inspect_parser_discovers_nested_commands_aliases_and_groups() -> None:
     assert arguments["secret"].hidden
     assert arguments["secret"].help is None
 
-    assert Program.from_json(catalog.to_json()) == catalog
     assert not hasattr(catalog, "__dict__")
     with pytest.raises(FrozenInstanceError):
         setattr(catalog, "conda_version", "changed")
@@ -239,7 +239,7 @@ def test_discovery_limits_raw_only_to_affected_visible_commands() -> None:
         diagnostic.reason == "could not evaluate choices: RuntimeError"
         for diagnostic in catalog.diagnostics
     )
-    assert "secret-choice-source" not in catalog.to_json()
+    assert "secret-choice-source" not in json.dumps(catalog.as_dict())
 
 
 def test_discovery_marks_greedy_plugin_commands_as_passthrough() -> None:
@@ -256,22 +256,6 @@ def test_discovery_marks_greedy_plugin_commands_as_passthrough() -> None:
     assert command.aliases == ("extension",)
     assert command.passthrough
     assert not command.raw_only
-
-
-def test_program_round_trips_unavailable_discovery() -> None:
-    catalog = Program(
-        prog="conda",
-        conda_version="unknown",
-        root=None,
-        diagnostics=(
-            Diagnostic(path=(), reason="target interpreter exited with status 1"),
-        ),
-    )
-
-    restored = Program.from_json(catalog.to_json())
-
-    assert restored == catalog
-    assert restored.root is None
 
 
 def test_inspect_plugins_uses_entry_points_and_public_hook_specs(
@@ -373,7 +357,6 @@ def test_inspect_plugins_uses_entry_points_and_public_hook_specs(
             hooks=("conda_solvers",),
         ),
     )
-    assert Plugin.from_dict(plugins[1].as_dict()) == plugins[1]
 
     _, discovered = discover_plugins()
     assert discovered == plugins

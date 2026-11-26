@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from jsonschema import ValidationError
 
+from conda_mcp.cli.parser import configure
 from conda_mcp.serving.command import (
     CommandTool,
     argument_argv,
@@ -26,6 +27,25 @@ from conda_mcp.serving.models import (
 
 if TYPE_CHECKING:
     from typing import Any
+
+
+@pytest.mark.parametrize("name", ["run", "register", "render"])
+def test_generated_manager_tools_preserve_server_argument_separator(name):
+    parser = argparse.ArgumentParser()
+    configure(parser)
+    tools = {tool.path: tool for tool in command_tools(inspect_parser(parser))}
+    values = {
+        "server": "demo",
+        "name": "servers",
+        "arguments": ["--json", "", "--", "a b"],
+    }
+    if name != "run":
+        values["client"] = "codex"
+    argv = tools[(name,)].compile(values)
+    assert argv[-5:] == ("--", "--json", "", "--", "a b")
+    parsed = parser.parse_args(argv)
+    assert parsed.name == "servers"
+    assert parsed.arguments == ["--json", "", "--", "a b"]
 
 
 def make_argument(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import shlex
 
 import pytest
 
@@ -177,3 +179,79 @@ def test_run_package_is_exact_owner_not_matchspec(cli, remote):
     result = cli("run", "-p", str(remote), "--package", "provider>=1", "demo")
     assert result.returncode != 0 and result.stdout == ""
     assert "package" in result.stderr.lower()
+
+
+@pytest.mark.parametrize("global_scope", [False, True])
+def test_edited_registration_error_provides_working_recovery(
+    cli, tmp_path, remote, global_scope
+):
+    scope = ["--global"] if global_scope else []
+    args = [
+        "register",
+        "demo",
+        "-p",
+        str(remote),
+        "--client",
+        "claude-code",
+        *scope,
+        "--json",
+    ]
+    assert cli(*args).returncode == 0
+    config = tmp_path / ("home/.claude.json" if global_scope else "project/.mcp.json")
+    document = json.loads(config.read_text())
+    document["mcpServers"]["demo"]["url"] = "https://example.org/edited"
+    config.write_text(json.dumps(document))
+    result = cli(*args)
+    assert result.returncode != 0
+    commands = re.findall(r"`(conda mcp [^`]+)`", json.loads(result.stdout)["message"])
+    assert commands
+    for command in commands:
+        assert cli(*shlex.split(command)[2:]).returncode == 0
+    assert "demo" not in json.loads(config.read_text())["mcpServers"]
+    assert cli(*args).returncode == 0
+
+
+def test_startup_arguments_remain_managed_and_can_be_updated(
+    cli, install_package, tmp_path
+):
+    prefix = install_package(
+        manifest={
+            "schema_version": 1,
+            "name": "demo",
+            "description": "Local server",
+            "stdio": {"command": "probe"},
+        },
+        files={"bin/probe": b"#!/bin/sh\nexit 99\n", "Scripts/probe.exe": b"fixture"},
+    )
+    (prefix / "bin/probe").chmod(0o755)
+    arguments = ["demo", "-p", str(prefix), "--client", "claude-code"]
+    for tail in (["--allow-write", "", "a b"], ["--timeout", "120"]):
+        rendered = cli("render", *arguments, "--", *tail)
+        assert rendered.returncode == 0, rendered.stdout + rendered.stderr
+        entry = json.loads(rendered.stdout)["mcpServers"]["demo"]
+        assert entry["args"][-len(tail) - 1 :] == ["--", *tail]
+        result = cli("register", *arguments, "--json", "--", *tail)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["entry"] == entry
+        unchanged = cli("register", *arguments, "--json", "--", *tail)
+        assert json.loads(unchanged.stdout)["changed"] is False
+        states = cli("registry", "--client", "claude-code", "--json")
+        assert json.loads(states.stdout)[0]["state"] == "managed"
+    assert cli("unregister", "demo", "--client", "claude-code").returncode == 0
+
+
+@pytest.mark.parametrize("command", ["register", "render"])
+def test_remote_servers_reject_startup_arguments(cli, remote, command):
+    result = cli(
+        command,
+        "demo",
+        "-p",
+        str(remote),
+        "--client",
+        "cursor",
+        "--json",
+        "--",
+        "--allow-write",
+    )
+    assert result.returncode != 0
+    assert "stdio" in json.loads(result.stdout)["message"]

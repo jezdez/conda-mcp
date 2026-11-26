@@ -83,9 +83,7 @@ class ReceiptRecord:
         if not (prefix / "conda-meta").is_dir():
             return "missing"
         try:
-            server = next(
-                (server for server in discover(prefix) if server.name == name), None
-            )
+            server = next(iter(discover(prefix, name=name)), None)
         except (CondaError, OSError, ValueError):
             return "invalid"
         if server is None:
@@ -365,11 +363,16 @@ def _registration(
     old_record = dict(receipt.entries).get(name)
     present = name in table
     before = fingerprint(table[name]) if present else None
+    scope = " --global" if target.global_scope else ""
+    recovery = (
+        f"Inspect with `conda mcp registry --client {target.client}{scope}`. "
+        f"To discard this entry, run `conda mcp unregister {name} "
+        f"--client {target.client}{scope} --force`, then register again."
+        if entry is not None
+        else "Add --force to this unregister command to remove only the selected entry."
+    )
     if present and (old_record is None or old_record.digest != before) and not force:
-        raise CondaError(
-            "Refusing to replace an unmanaged or edited entry. "
-            "Inspect the client registry or use --force."
-        )
+        raise CondaError(f"Refusing to change an unmanaged or edited entry. {recovery}")
     record = (
         ReceiptRecord.from_dict({**(source or {}), "digest": fingerprint(entry)})
         if entry is not None
@@ -382,9 +385,7 @@ def _registration(
             != (record.prefix, record.package, record.manifest)
             and not force
         ):
-            raise CondaError(
-                "Entry belongs to a different provider. Use --force to replace it."
-            )
+            raise CondaError(f"Entry belongs to a different provider. {recovery}")
         if record.source_state(name) != "current":
             raise CondaError("Registration source changed or is unavailable.")
     after = record.digest if record else None

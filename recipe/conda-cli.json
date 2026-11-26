@@ -3,7 +3,7 @@
   "name": "conda-cli",
   "description": "Expose this conda installation through MCP",
   "stdio": {
-    "command": "conda",
-    "args": ["mcp", "serve"]
+    "command": "python",
+    "args": ["-I", "-m", "conda_mcp._stdio", "serve"]
   }
 }

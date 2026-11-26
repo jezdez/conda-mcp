@@ -7,6 +7,7 @@ on:
       - ".github/workflows/docs.yml"
       - "docs/**"
       - "demos/**"
+      - "examples/**"
       - "*.md"
       - "src/**"
       - "pyproject.toml"
@@ -17,6 +18,7 @@ on:
       - ".github/workflows/docs.yml"
       - "docs/**"
       - "demos/**"
+      - "examples/**"
       - "*.md"
       - "src/**"
       - "pyproject.toml"
@@ -50,7 +52,7 @@ jobs:
           auto-activate: true
       - run: conda install -n base --yes --override-channels -c conda-forge 'conda>=26.10' 'conda-workspaces>=0.12'
       - run: conda workspace install --locked -e docs
-      - run: conda task run -e docs docs
+      - run: conda task run docs
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs/_build/dirhtml

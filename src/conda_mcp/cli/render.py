@@ -18,7 +18,7 @@ def execute(args) -> int:
     server = select(args)
     if server.stdio:
         server.resolve_executable()
-    entry = render_entry(server, target)
+    entry = render_entry(server, target, tuple(args.arguments))
     toml = target.path.suffix == ".toml"
     snippet = (
         ClientConfig.from_bytes(target, None).render(args.server, entry).decode("utf-8")

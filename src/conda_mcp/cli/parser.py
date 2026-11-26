@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from argparse import REMAINDER
+import sys
+from argparse import REMAINDER, Namespace
 from typing import TYPE_CHECKING
 
+from conda.cli.conda_argparse import ArgumentParser as CondaArgumentParser
 from conda.cli.helpers import add_parser_json, add_parser_prefix
 
 if TYPE_CHECKING:
@@ -13,9 +15,24 @@ if TYPE_CHECKING:
 _CLIENTS = ("claude-code", "copilot", "codex", "kilo", "claude-desktop", "cursor")
 
 
+class MCPArgumentParser(CondaArgumentParser):
+    """Separate literal server argv before conda parses manager options."""
+
+    def parse_known_args(self, args=None, namespace=None):
+        if namespace is None:
+            namespace = Namespace()
+        if self.get_default("arguments") is None:
+            return super().parse_known_args(args, namespace)
+        argv = list(sys.argv[1:] if args is None else args)
+        separator = argv.index("--") if "--" in argv else len(argv)
+        parsed, unknown = super().parse_known_args(argv[:separator], namespace)
+        parsed.arguments = argv[separator + 1 :]
+        return parsed, unknown
+
+
 def configure(parser: ArgumentParser) -> None:
     """Keep environment selection independent of client destination scope."""
-    commands = parser.add_subparsers(dest="mcp_command")
+    commands = parser.add_subparsers(dest="mcp_command", parser_class=MCPArgumentParser)
     serve = commands.add_parser(
         "serve", help="Expose a conda installation through MCP over stdio."
     )
@@ -55,7 +72,13 @@ def configure(parser: ArgumentParser) -> None:
         "--package", help="Require this exact manifest-owning package name."
     )
     run.add_argument("server")
-    run.add_argument("arguments", nargs=REMAINDER)
+    run.add_argument(
+        "--",
+        dest="arguments",
+        nargs=REMAINDER,
+        default=[],
+        help="Pass the remaining arguments literally to the server.",
+    )
     descriptions = {
         "render": "Render a native client snippet without changing any files.",
         "register": "Register a server in this directory, or globally with --global.",
@@ -89,7 +112,15 @@ def configure(parser: ArgumentParser) -> None:
                 "--force",
                 action="store_true",
                 help=(
-                    "Remove only the selected edited or unmanaged entry; "
-                    "never bypass unsafe paths or parsing errors."
+                    "Remove only the selected edited or unmanaged entry. "
+                    "Unsafe paths and parsing errors still stop removal."
                 ),
+            )
+        if name in {"render", "register"}:
+            command.add_argument(
+                "--",
+                dest="arguments",
+                nargs=REMAINDER,
+                default=[],
+                help="Append literal server startup arguments to the client entry.",
             )

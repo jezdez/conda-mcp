@@ -18,6 +18,9 @@ def _runtime_dependencies() -> list[str]:
     dependencies = [
         "conda>=26.10",
         "python>=3.11",
+        "anyio>=4.9",
+        "jsonschema>=4.20",
+        "mcp>=2,<3",
         "rich>=13",
         "tomlkit>=0.13",
     ]

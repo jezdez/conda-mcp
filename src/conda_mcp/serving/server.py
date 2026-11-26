@@ -25,8 +25,7 @@ from mcp.types import (
 )
 
 from . import __version__
-from .capabilities import plugin_fingerprint
-from .command import command_tools
+from .command import COMPLETION_TOOL_NAME, EXECUTE_TOOL_NAME, command_tools
 from .execution import CompletionQueryError
 from .policy import PolicyViolation, SafetyPolicy
 
@@ -46,8 +45,6 @@ if TYPE_CHECKING:
     from .policy import OperationPolicy
 
 CAPABILITIES_URI: Final = "conda://capabilities"
-EXECUTE_TOOL_NAME: Final = "conda_execute"
-COMPLETION_TOOL_NAME: Final = "conda_cli_command"
 COMPLETION_INPUT_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
     "properties": {
@@ -210,7 +207,7 @@ class CondaMCPServer:
                     open_world_hint=False,
                 ),
             )
-            if completion_available and COMPLETION_TOOL_NAME not in self.generated_tools
+            if completion_available
             else None
         )
         self.completion_input_validator = Draft202012Validator(COMPLETION_INPUT_SCHEMA)
@@ -412,13 +409,12 @@ class CondaMCPServer:
             and self.capabilities is not None
         ):
             try:
-                conda_version, plugins = await self.executor.discover_plugin_state()
+                current_fingerprint = await self.executor.probe_plugin_fingerprint()
             except (OSError, RuntimeError, ValueError):
                 self.restart_required = True
             else:
                 self.restart_required = (
-                    plugin_fingerprint(conda_version, plugins)
-                    != self.capabilities.discovery_fingerprint
+                    current_fingerprint != self.capabilities.discovery_fingerprint
                 )
         return replace(result, restart_required=self.restart_required)
 

@@ -5,8 +5,10 @@ import codecs
 import json
 import math
 import os
+import re
 import signal
 import subprocess
+import sys
 import sysconfig
 import time
 from contextlib import suppress
@@ -35,6 +37,7 @@ class CompletionQueryError(RuntimeError):
 
 
 _WINDOWS_CLEANUP_SECONDS = 5
+_MAX_PARSED_JSON_DEPTH = 64
 
 
 def _add_cleanup_note(error: BaseException, operation: str, detail: object) -> None:
@@ -142,6 +145,23 @@ class CondaExecutor:
         from .discovery import discover_plugins
 
         return discover_plugins()
+
+    async def probe_plugin_fingerprint(self) -> str:
+        """Inspect installed plugin hooks outside the MCP server process."""
+        result = await self._execute_process(
+            (sys.executable, "-I", "-m", "conda_mcp.serving._plugin_probe"),
+            cwd=None,
+            stdin=None,
+            timeout=min(self.timeout_seconds, 30),
+        )
+        digest = result.stdout.strip()
+        if (
+            result.exit_code != 0
+            or result.stdout_truncated
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        ):
+            raise RuntimeError("plugin probe failed")
+        return digest
 
     async def inspect_completion_command(
         self,
@@ -356,10 +376,18 @@ class CondaExecutor:
                     with suppress(BrokenPipeError, ConnectionResetError):
                         await process.stdin.wait_closed()
 
+            async def wait_for_exit() -> int:
+                if not on_win:
+                    # Python 3.11's wait() also waits for inherited pipes to close.
+                    # Observe the root exit first so we can stop its descendants.
+                    while process.returncode is None:
+                        await asyncio.sleep(0.01)
+                return await process.wait()
+
             stdout_task = asyncio.create_task(capture(process.stdout))
             stderr_task = asyncio.create_task(capture(process.stderr))
             input_task = asyncio.create_task(send_input())
-            wait_task = asyncio.create_task(process.wait())
+            wait_task = asyncio.create_task(wait_for_exit())
             tasks = (wait_task, stdout_task, stderr_task, input_task)
 
             async def stop_process() -> tuple[float | None, BaseException | None]:
@@ -451,7 +479,17 @@ class CondaExecutor:
                 await await_windows_cleanup(cleanup_task)
 
             try:
-                _, pending = await asyncio.wait(tasks, timeout=timeout)
+                if on_win:
+                    _, pending = await asyncio.wait(tasks, timeout=timeout)
+                else:
+                    deadline = time.monotonic() + timeout
+                    _, pending = await asyncio.wait((wait_task,), timeout=timeout)
+                    if not pending:
+                        with anyio.CancelScope(shield=True):
+                            await stop_process()
+                        _, pending = await asyncio.wait(
+                            tasks, timeout=max(0, deadline - time.monotonic())
+                        )
                 if pending:
                     timed_out = True
                     if on_win:
@@ -496,9 +534,29 @@ class CondaExecutor:
             def reject_constant(value: str) -> None:
                 raise ValueError(value)
 
+            def finite_float(value: str) -> float:
+                number = float(value)
+                if not math.isfinite(number):
+                    raise ValueError(value)
+                return number
+
             try:
-                parsed_json = json.loads(stdout, parse_constant=reject_constant)
-            except (json.JSONDecodeError, ValueError):
+                candidate = json.loads(
+                    stdout,
+                    parse_constant=reject_constant,
+                    parse_float=finite_float,
+                )
+                pending_values = [(candidate, 0)]
+                while pending_values:
+                    value, depth = pending_values.pop()
+                    if isinstance(value, (dict, list)):
+                        if depth >= _MAX_PARSED_JSON_DEPTH:
+                            break
+                        children = value.values() if isinstance(value, dict) else value
+                        pending_values.extend((child, depth + 1) for child in children)
+                else:
+                    parsed_json = candidate
+            except (json.JSONDecodeError, ValueError, RecursionError):
                 pass
 
         return ExecutionResult(

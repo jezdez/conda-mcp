@@ -41,19 +41,18 @@ def execute(args: Namespace) -> int:
         raise CondaValueError(message) from error
 
 
-def inventory(args: Namespace) -> list[Server]:
+def inventory(args: Namespace, *, name: str | None = None) -> list[Server]:
     """Discover servers in one existing conda prefix."""
     prefix = (
         locate_prefix_by_name(args.name)
         if args.name
         else determine_target_prefix(context, args)
     )
-    return discover(Path(prefix).resolve())
+    return discover(Path(prefix).resolve(), name=name)
 
 
 def select(args: Namespace) -> Server:
     """Select one installed server by name."""
-    for row in inventory(args):
-        if row.name == args.server:
-            return row
+    for row in inventory(args, name=args.server):
+        return row
     raise CondaError("No installed MCP server with that name.")

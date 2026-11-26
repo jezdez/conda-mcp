@@ -9,7 +9,7 @@ import pytest
 from mcp import Client, MCPError
 from mcp.types import INVALID_PARAMS, INVALID_REQUEST
 
-from conda_mcp.serving.capabilities import Capabilities
+from conda_mcp.serving.capabilities import Capabilities, plugin_fingerprint
 from conda_mcp.serving.execution import CompletionQueryError
 from conda_mcp.serving.models import (
     ActionKind,
@@ -43,7 +43,7 @@ class RecordingExecutor:
     calls: list[tuple[str, ...]] = field(default_factory=list)
     plugins: tuple[Plugin, ...] = ()
     exit_code: int = 0
-    plugin_state_calls: int = 0
+    plugin_fingerprint_calls: int = 0
     completion_calls: list[tuple[str, ...]] = field(default_factory=list)
     timeout_seconds: float = 900
 
@@ -61,9 +61,9 @@ class RecordingExecutor:
             parsed_json={"ok": True},
         )
 
-    async def discover_plugin_state(self) -> tuple[str, tuple[Plugin, ...]]:
-        self.plugin_state_calls += 1
-        return "26.7", self.plugins
+    async def probe_plugin_fingerprint(self) -> str:
+        self.plugin_fingerprint_calls += 1
+        return plugin_fingerprint("26.7", self.plugins)
 
     async def inspect_completion_command(
         self,
@@ -136,6 +136,28 @@ async def test_execute_tool_returns_structured_result(
         server.execute_tool.input_schema["properties"]["timeout_seconds"]["maximum"]
         == 2
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("stdout", ['{"value": 1e400}', "[" * 500 + "0" + "]" * 500])
+async def test_unrepresentable_parsed_json_keeps_successful_protocol_result(
+    fake_conda: tuple[CondaExecutor, Path], stdout: str
+) -> None:
+    executor, script = fake_conda
+    server = CondaMCPServer(
+        executor,
+        policy=SafetyPolicy(allow_write=True, allow_exec=True),
+    )
+
+    async with Client(server.server) as client:
+        result = await client.call_tool(
+            EXECUTE_TOOL_NAME, {"argv": [str(script), "literal", stdout]}
+        )
+
+    assert not result.is_error
+    assert result.structured_content["exit_code"] == 0
+    assert result.structured_content["stdout"] == stdout
+    assert result.structured_content["parsed_json"] is None
 
 
 @pytest.mark.anyio
@@ -342,7 +364,31 @@ async def test_successful_mutation_reports_restart_without_changing_tools(
     assert "Restart the MCP server" in changed.content[0].text
     assert read.structured_content["restart_required"] is True
     assert [tool.name for tool in before.tools] == [tool.name for tool in after.tools]
-    assert executor.plugin_state_calls == 1
+    assert executor.plugin_fingerprint_calls == 1
+
+
+@pytest.mark.anyio
+async def test_restart_check_detects_hook_changes_without_metadata_changes() -> None:
+    initial = Plugin("example", "1", "plugin", "example.plugin", ("conda_solvers",))
+    executor = RecordingExecutor(
+        plugins=(Plugin("example", "1", "plugin", "example.plugin"),)
+    )
+    program = Program(
+        prog="conda",
+        conda_version="26.7",
+        root=Command(name=None, terminal=False, children=(Command(name="install"),)),
+    )
+    server = CondaMCPServer(  # type: ignore[arg-type]
+        executor,
+        Capabilities("conda", program, (initial,)),
+        SafetyPolicy(allow_write=True),
+    )
+
+    async with Client(server.server) as client:
+        result = await client.call_tool("conda_install", {})
+
+    assert result.structured_content["restart_required"] is True
+    assert executor.plugin_fingerprint_calls == 1
 
 
 @pytest.mark.anyio
@@ -361,7 +407,7 @@ async def test_failed_mutation_does_not_request_restart(
 
     assert result.is_error
     assert result.structured_content["restart_required"] is False
-    assert executor.plugin_state_calls == 0
+    assert executor.plugin_fingerprint_calls == 0
 
 
 @pytest.mark.anyio
@@ -375,6 +421,7 @@ async def test_manager_commands_follow_the_same_policy(
         children=(
             Command(name="list"),
             Command(name="register"),
+            Command(name="run"),
             Command(name="serve"),
         ),
     )
@@ -387,8 +434,65 @@ async def test_manager_commands_follow_the_same_policy(
             await client.call_tool("conda_mcp_register", {})
 
     assert "conda_mcp_serve" not in names
+    assert "conda_mcp_run" not in names
     assert allowed.structured_content["exit_code"] == 0
     assert executor.calls == [("mcp", "list")]
+
+
+@pytest.mark.anyio
+async def test_plugin_inspection_tools_run_without_write_permission(
+    server_factory: ServerFactory,
+) -> None:
+    executor = RecordingExecutor()
+    plugins = Command(
+        name="plugins",
+        terminal=False,
+        children=(Command(name="info"), Command(name="list"), Command(name="enable")),
+    )
+    server = server_factory(executor, (plugins,), SafetyPolicy())
+
+    async with Client(server.server) as client:
+        listed = {tool.name: tool for tool in (await client.list_tools()).tools}
+        await client.call_tool("conda_plugins_info", {})
+        await client.call_tool("conda_plugins_list", {})
+        with pytest.raises(MCPError):
+            await client.call_tool("conda_plugins_enable", {})
+
+    assert listed["conda_plugins_info"].annotations.read_only_hint is True
+    assert listed["conda_plugins_list"].annotations.read_only_hint is True
+    assert executor.calls == [("plugins", "info"), ("plugins", "list")]
+
+
+@pytest.mark.anyio
+async def test_generated_commands_do_not_shadow_builtin_tools() -> None:
+    completion = Plugin("conda-completion", "0.3", "completion", "completion.plugin")
+    executor = RecordingExecutor(plugins=(completion,))
+    program = Program(
+        prog="conda",
+        conda_version="26.7",
+        root=Command(
+            name=None,
+            terminal=False,
+            children=(Command(name="execute"), Command(name="cli_command")),
+        ),
+    )
+    server = CondaMCPServer(  # type: ignore[arg-type]
+        executor,
+        Capabilities("conda", program, (completion,)),
+        SafetyPolicy(allow_write=True, allow_exec=True),
+    )
+    generated = list(server.generated_tools)
+
+    async with Client(server.server) as client:
+        names = [tool.name for tool in (await client.list_tools()).tools]
+        await client.call_tool(generated[0], {})
+        await client.call_tool(generated[1], {})
+        await client.call_tool(EXECUTE_TOOL_NAME, {"argv": ["info"]})
+        await client.call_tool(COMPLETION_TOOL_NAME, {})
+
+    assert names == [EXECUTE_TOOL_NAME, COMPLETION_TOOL_NAME, *generated]
+    assert executor.calls == [("execute",), ("cli_command",), ("info",)]
+    assert executor.completion_calls == [()]
 
 
 @pytest.mark.parametrize(
@@ -539,7 +643,7 @@ async def test_failed_plugin_inspection_after_mutation_keeps_restart_required(
     async def fail():
         raise OSError("plugin metadata unavailable")
 
-    monkeypatch.setattr(executor, "discover_plugin_state", fail)
+    monkeypatch.setattr(executor, "probe_plugin_fingerprint", fail)
     server = server_factory(
         executor,
         (Command(name="install"), Command(name="info")),

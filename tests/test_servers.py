@@ -500,6 +500,72 @@ def test_revalidate_reloads_replaced_manifest_owner(install_package, tmp_path: P
         server.revalidate()
 
 
+def test_revalidate_ignores_unrelated_invalid_declaration(install_package):
+    manifest = {
+        "schema_version": 1,
+        "name": "demo",
+        "description": "Valid server",
+        "http": {"url": "https://example.org/mcp"},
+    }
+    prefix = install_package(manifest=manifest)
+    [server] = discover(prefix)
+    install_package(
+        "other", manifest={**manifest, "name": "broken", "schema_version": 999}
+    )
+    assert server.revalidate() == server
+
+
+def test_runtime_rejects_null_credential_reference(install_package):
+    prefix = install_package(
+        manifest={
+            "schema_version": 1,
+            "name": "demo",
+            "description": "Invalid credentials",
+            "http": {"url": "https://example.org/mcp", "bearer_token_env": None},
+        }
+    )
+    with pytest.raises(CondaError, match="Invalid or duplicate MCP declaration"):
+        discover(prefix)
+
+
+@pytest.mark.parametrize(
+    "transport",
+    [
+        {"stdio": {"command": "probe\n"}},
+        {
+            "stdio": {
+                "command": "probe",
+                "environment": [{"name": "TOKEN\n", "required": True}],
+            }
+        },
+        {"http": {"url": "https://example.org/mcp", "bearer_token_env": "TOKEN\n"}},
+        {
+            "http": {
+                "url": "https://example.org/mcp",
+                "header_env": {"X-Token\n": "TOKEN"},
+            }
+        },
+        {
+            "http": {
+                "url": "https://example.org/mcp",
+                "header_env": {"X-Token": "TOKEN\n"},
+            }
+        },
+    ],
+)
+def test_manifest_rejects_trailing_newlines_in_identifiers(install_package, transport):
+    prefix = install_package(
+        manifest={
+            "schema_version": 1,
+            "name": "demo",
+            "description": "Invalid identifier",
+            **transport,
+        }
+    )
+    with pytest.raises(CondaError, match="Invalid or duplicate MCP declaration"):
+        discover(prefix)
+
+
 def test_revalidate_rejects_replaced_manifest_channel(install_package, tmp_path: Path):
     """Treat a package channel change as a replacement during revalidation."""
     manifest = {
@@ -581,3 +647,26 @@ def test_executable_resolution_accepts_dependency_owned_symlink_target(
     [server] = discover(prefix)
 
     assert server.resolve_executable() == prefix / "bin/example"
+
+
+@pytest.mark.skipif(on_win, reason="POSIX directory symlink")
+def test_executable_resolution_rejects_unrecorded_target_through_directory_symlink(
+    install_package,
+):
+    prefix = install_package(
+        manifest={
+            "schema_version": 1,
+            "name": "example",
+            "description": "Example",
+            "stdio": {"command": "example"},
+        },
+        files={"bin/example": b"#!/bin/sh\n"},
+    )
+    (prefix / "bin/example").chmod(0o755)
+    (prefix / "bin").rename(prefix / "real-bin")
+    (prefix / "bin").symlink_to(prefix / "real-bin", target_is_directory=True)
+
+    (server,) = discover(prefix)
+
+    with pytest.raises(CondaError, match="missing or ambiguously owned"):
+        server.resolve_executable()

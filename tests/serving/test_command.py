@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from jsonschema import ValidationError
 
+from conda_mcp.cli.parser import configure
 from conda_mcp.serving.command import (
     CommandTool,
     argument_argv,
@@ -26,6 +27,25 @@ from conda_mcp.serving.models import (
 
 if TYPE_CHECKING:
     from typing import Any
+
+
+@pytest.mark.parametrize("name", ["run", "register", "render"])
+def test_generated_manager_tools_preserve_server_argument_separator(name):
+    parser = argparse.ArgumentParser()
+    configure(parser)
+    tools = {tool.path: tool for tool in command_tools(inspect_parser(parser))}
+    values = {
+        "server": "demo",
+        "name": "servers",
+        "arguments": ["--json", "", "--", "a b"],
+    }
+    if name != "run":
+        values["client"] = "codex"
+    argv = tools[(name,)].compile(values)
+    assert argv[-5:] == ("--", "--json", "", "--", "a b")
+    parsed = parser.parse_args(argv)
+    assert parsed.name == "servers"
+    assert parsed.arguments == ["--json", "", "--", "a b"]
 
 
 def make_argument(
@@ -107,6 +127,77 @@ def test_optional_values_round_trip_through_the_discovered_parser(
 
     assert compiled == ("example", *argv)
     assert parser.parse_args(compiled).value == value
+
+
+@pytest.mark.parametrize(
+    ("options", "value", "expected", "parsed"),
+    [
+        ({"type": int}, 2.0, ("--value", "2"), 2),
+        ({"action": "append", "type": int}, [2.0], ("--value", "2"), [2]),
+        (
+            {"action": "extend", "type": int, "nargs": 2},
+            [2.0, 3.0],
+            ("--value", "2", "3"),
+            [2, 3],
+        ),
+        ({"action": "count"}, 2.0, ("--value", "--value"), 2),
+    ],
+)
+def test_integral_json_numbers_round_trip_through_argparse(
+    options, value, expected, parsed
+) -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", **options)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    compiled = tool.compile({"value": value})
+
+    assert compiled == ("example", *expected)
+    assert parser.parse_args(compiled).value == parsed
+
+
+@pytest.mark.parametrize(
+    ("options", "value", "expected", "parsed"),
+    [
+        ({}, "--message", ("--value=--message",), "--message"),
+        ({"nargs": "?"}, "--message", ("--value=--message",), "--message"),
+        (
+            {"action": "append"},
+            ["--message"],
+            ("--value=--message",),
+            ["--message"],
+        ),
+        (
+            {"action": "extend"},
+            ["--message"],
+            ("--value=--message",),
+            list("--message"),
+        ),
+    ],
+)
+def test_dash_prefixed_scalar_option_values_round_trip_through_argparse(
+    options, value, expected, parsed
+) -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", **options)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    compiled = tool.compile({"value": value})
+
+    assert compiled == ("example", *expected)
+    assert parser.parse_args(compiled).value == parsed
+
+
+def test_dash_prefixed_multi_value_option_is_rejected_before_argparse() -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", nargs=2)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    with pytest.raises(ValidationError):
+        tool.compile({"value": ["plain", "--message"]})
 
 
 @pytest.mark.parametrize(
@@ -322,7 +413,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
                 "type": "array",
                 "items": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {"type": "string", "pattern": "^(?!-)"},
                     "minItems": 2,
                     "maxItems": 2,
                 },
@@ -336,7 +427,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
             make_argument(ActionKind.EXTEND, nargs="+"),
             {
                 "type": "array",
-                "items": {"type": "string"},
+                "items": {"type": "string", "pattern": "^(?!-)"},
                 "minItems": 1,
             },
         ),
@@ -346,15 +437,15 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
         (make_argument(ActionKind.STORE_CONST), {"type": "boolean"}),
         (
             make_argument(ActionKind.APPEND_CONST),
-            {"type": "integer", "minimum": 0},
+            {"type": "integer", "minimum": 0, "maximum": 128},
         ),
         (
             make_argument(ActionKind.EXTEND_CONST),
-            {"type": "array", "items": {"type": "string"}},
+            {"type": "array", "items": {"type": "string", "pattern": "^(?!-)"}},
         ),
         (
             make_argument(ActionKind.COUNT),
-            {"type": "integer", "minimum": 0},
+            {"type": "integer", "minimum": 0, "maximum": 128},
         ),
     ],
 )
@@ -381,11 +472,33 @@ def test_argument_input_schema_converts_numeric_choices_and_requirements() -> No
         "enum": [1, 3],
         "description": "Number of retries.",
     }
-    assert argument_input_schema(count) == {"type": "integer", "minimum": 1}
+    assert argument_input_schema(count) == {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 128,
+    }
     assert argument_input_schema(disabled) == {
         "type": "boolean",
         "const": False,
     }
+
+
+@pytest.mark.parametrize("action", [ActionKind.COUNT, ActionKind.APPEND_CONST])
+def test_repeated_flags_have_a_small_finite_limit(action: ActionKind) -> None:
+    tool = make_tool(make_argument(action))
+    maximum = tool.input_schema["properties"]["value"]["maximum"]
+
+    assert 4 < maximum <= 256
+    assert tool.compile({"value": maximum}) == (
+        "example",
+        *("--value",) * maximum,
+    )
+    with pytest.raises(ValidationError):
+        tool.compile({"value": maximum + 1})
+    with pytest.raises(ValidationError):
+        tool.compile({"value": 2**100})
+    with pytest.raises(ValueError, match="repeat count"):
+        argument_argv(make_argument(action), maximum + 1)
 
 
 @pytest.mark.parametrize(
@@ -580,7 +693,7 @@ def test_extend_const_emits_one_flag_for_an_empty_value_list() -> None:
 
     assert tool.input_schema["properties"]["value"] == {
         "type": "array",
-        "items": {"type": "string"},
+        "items": {"type": "string", "pattern": "^(?!-)"},
     }
     assert tool.compile({"value": []}) == ("example", "--value")
     assert tool.compile({"value": ["one", "two"]}) == (
@@ -648,6 +761,46 @@ def test_terminal_nonleaf_commands_and_their_children_receive_tools() -> None:
     assert generated[1].compile({}) == ("config", "sources")
 
 
+def test_generated_commands_cannot_take_builtin_tool_names() -> None:
+    program = Program(
+        prog="conda",
+        conda_version="26.10.0",
+        root=Command(
+            name=None,
+            terminal=False,
+            children=(Command(name="execute"), Command(name="cli_command")),
+        ),
+    )
+
+    generated = command_tools(program)
+
+    assert generated[0].name.startswith("conda_execute_")
+    assert generated[1].name.startswith("conda_cli_command_")
+    assert generated[0].compile({}) == ("execute",)
+    assert generated[1].compile({}) == ("cli_command",)
+
+
+def test_hashed_reserved_name_cannot_hide_another_command() -> None:
+    reserved_hash = canonical_tool_name(("execute",), disambiguate=True)
+    sibling = reserved_hash.removeprefix("conda_")
+    program = Program(
+        prog="conda",
+        conda_version="26.10.0",
+        root=Command(
+            name=None,
+            terminal=False,
+            children=(Command(name="execute"), Command(name=sibling)),
+        ),
+    )
+
+    generated = command_tools(program)
+    names = [tool.name for tool in generated]
+
+    assert names[0] == reserved_hash
+    assert len(names) == len(set(names))
+    assert generated[1].compile({}) == (sibling,)
+
+
 def test_command_tool_is_frozen_and_names_are_canonical() -> None:
     tool = make_tool()
 
@@ -663,7 +816,7 @@ def test_command_tool_is_frozen_and_names_are_canonical() -> None:
         tool.commands = ()
 
 
-def test_manager_serve_is_not_a_generated_tool() -> None:
+def test_manager_stdio_launchers_are_not_generated_tools() -> None:
     root = Command(
         name=None,
         terminal=False,
@@ -673,6 +826,7 @@ def test_manager_serve_is_not_a_generated_tool() -> None:
                 terminal=False,
                 children=(
                     Command(name="list"),
+                    Command(name="run"),
                     Command(name="serve"),
                 ),
             ),

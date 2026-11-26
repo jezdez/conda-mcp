@@ -20,9 +20,10 @@ def execute(args) -> int:
     ]
     result = []
     seen = set()
+    source_cache = {}
     for target in targets:
         if target.path not in seen:
-            result.extend(registration(target))
+            result.extend(registration(target, _source_cache=source_cache))
             seen.add(target.path)
     if context.json:
         structured(result)

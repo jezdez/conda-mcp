@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import FrozenInstanceError
 from importlib import metadata
@@ -8,6 +9,7 @@ from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+from jsonschema import ValidationError
 
 from conda_mcp.serving.command import command_tools
 from conda_mcp.serving.discovery import (
@@ -17,7 +19,7 @@ from conda_mcp.serving.discovery import (
     inspect_parser,
     inspect_plugins,
 )
-from conda_mcp.serving.models import ActionKind, Diagnostic, Plugin, Program
+from conda_mcp.serving.models import ActionKind, Plugin
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -113,7 +115,6 @@ def test_inspect_parser_discovers_nested_commands_aliases_and_groups() -> None:
     assert arguments["secret"].hidden
     assert arguments["secret"].help is None
 
-    assert Program.from_json(catalog.to_json()) == catalog
     assert not hasattr(catalog, "__dict__")
     with pytest.raises(FrozenInstanceError):
         setattr(catalog, "conda_version", "changed")
@@ -239,7 +240,44 @@ def test_discovery_limits_raw_only_to_affected_visible_commands() -> None:
         diagnostic.reason == "could not evaluate choices: RuntimeError"
         for diagnostic in catalog.diagnostics
     )
-    assert "secret-choice-source" not in catalog.to_json()
+    assert "secret-choice-source" not in json.dumps(catalog.as_dict())
+
+
+def test_hidden_required_group_keeps_other_tools_available() -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    commands = parser.add_subparsers(dest="command")
+    hidden = commands.add_parser("hidden")
+    group = hidden.add_mutually_exclusive_group(required=True)
+    group.add_argument("--internal", action="store_true", help=argparse.SUPPRESS)
+    visible = commands.add_parser("visible")
+    visible.add_argument("--known", action="store_true")
+
+    catalog = inspect_parser(parser)
+    tools = command_tools(catalog)
+
+    assert catalog.root is not None
+    assert catalog.root.children[0].raw_only
+    assert any(
+        item.path == ("hidden",) and "hidden required" in item.reason
+        for item in catalog.diagnostics
+    )
+    assert [tool.path for tool in tools] == [("visible",)]
+    assert tools[0].as_mcp_tool().name == "conda_visible"
+
+
+def test_required_group_with_one_visible_action_stays_structured() -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("mixed")
+    group = child.add_mutually_exclusive_group(required=True)
+    group.add_argument("--internal", action="store_true", help=argparse.SUPPRESS)
+    group.add_argument("--visible", action="store_true")
+
+    tool = command_tools(inspect_parser(parser))[0]
+
+    assert tool.compile({"visible": True}) == ("mixed", "--visible")
+    assert parser.parse_args(tool.compile({"visible": True})).visible
+    with pytest.raises(ValidationError):
+        tool.compile({})
 
 
 def test_discovery_marks_greedy_plugin_commands_as_passthrough() -> None:
@@ -256,22 +294,6 @@ def test_discovery_marks_greedy_plugin_commands_as_passthrough() -> None:
     assert command.aliases == ("extension",)
     assert command.passthrough
     assert not command.raw_only
-
-
-def test_program_round_trips_unavailable_discovery() -> None:
-    catalog = Program(
-        prog="conda",
-        conda_version="unknown",
-        root=None,
-        diagnostics=(
-            Diagnostic(path=(), reason="target interpreter exited with status 1"),
-        ),
-    )
-
-    restored = Program.from_json(catalog.to_json())
-
-    assert restored == catalog
-    assert restored.root is None
 
 
 def test_inspect_plugins_uses_entry_points_and_public_hook_specs(
@@ -373,7 +395,6 @@ def test_inspect_plugins_uses_entry_points_and_public_hook_specs(
             hooks=("conda_solvers",),
         ),
     )
-    assert Plugin.from_dict(plugins[1].as_dict()) == plugins[1]
 
     _, discovered = discover_plugins()
     assert discovered == plugins

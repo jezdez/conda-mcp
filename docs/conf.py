@@ -5,6 +5,9 @@ from __future__ import annotations
 project = html_title = "conda-mcp"
 extensions = ["myst_parser", "sphinx_design"]
 myst_enable_extensions = ["colon_fence"]
+nitpicky = True
+sd_card_legacy_separators = False
+sd_tabs_storage_prefix = "conda-mcp"
 html_theme = "conda_sphinx_theme"
 html_theme_options = {
     "icon_links": [

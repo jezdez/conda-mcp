@@ -331,6 +331,21 @@ def _inspect_command(
         for group in parser._mutually_exclusive_groups
         if any(action in action_ids for action in group._group_actions)
     )
+    visible_ids = {argument.id for argument in arguments if not argument.hidden}
+    if any(argument.hidden and argument.required for argument in arguments) or any(
+        group.required
+        and not any(
+            action_ids.get(action) in visible_ids for action in group._group_actions
+        )
+        for group in parser._mutually_exclusive_groups
+    ):
+        diagnostics.append(
+            Diagnostic(
+                path=path,
+                reason="hidden required argument cannot be represented",
+            )
+        )
+        raw_only = True
 
     children: list[Command] = []
     for subparser_action in subparsers:
@@ -470,7 +485,7 @@ def _metavar(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
 
 
 def _argument_id(action: argparse.Action, used_ids: set[str]) -> str:
-    if action.option_strings:
+    if action.option_strings and action.option_strings != ["--"]:
         preferred = next(
             (option[2:] for option in action.option_strings if option.startswith("--")),
             action.option_strings[0].lstrip("-"),

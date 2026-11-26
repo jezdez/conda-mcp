@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import asdict, dataclass, fields, replace
+from datetime import date, datetime, time
 from pathlib import Path, PurePosixPath
 
 from conda import CondaError
@@ -13,22 +14,50 @@ from conda.gateways.disk.lock import lock
 
 from .clients.config import MAX_CONFIG_BYTES, ClientConfig, ConfigTarget
 from .files import atomic_write, load_json, open_lock, read_bytes
-from .servers import discover
+from .servers import Server, discover, discover_inventory
 
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
+def _typed_toml_value(value: object) -> object:
+    if isinstance(value, datetime):
+        return ("datetime", value.isoformat())
+    if isinstance(value, date):
+        return ("date", value.isoformat())
+    if isinstance(value, time):
+        return ("time", value.isoformat())
+    if isinstance(value, dict):
+        return (
+            "table",
+            tuple(
+                (key, _typed_toml_value(item)) for key, item in sorted(value.items())
+            ),
+        )
+    if isinstance(value, (list, tuple)):
+        return ("array", tuple(_typed_toml_value(item) for item in value))
+    if value is None:
+        return ("null",)
+    if isinstance(value, bool):
+        return ("boolean", value)
+    if isinstance(value, int):
+        return ("integer", value)
+    if isinstance(value, float):
+        return ("number", value)
+    if isinstance(value, str):
+        return ("string", value)
+    raise TypeError(f"Unsupported entry value: {type(value).__name__}")
+
+
 def fingerprint(entry: object) -> str:
     """Hash all entry fields, independent of JSON formatting."""
-    return hashlib.sha256(
-        json.dumps(
-            entry,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    encoder = json.JSONEncoder(
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
+    try:
+        payload = encoder.encode(entry)
+    except TypeError:
+        payload = "toml:" + encoder.encode(_typed_toml_value(entry))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -77,15 +106,20 @@ class ReceiptRecord:
         """Serialize the stable receipt schema, never a live server object."""
         return asdict(self)
 
-    def source_state(self, name: str) -> str:
-        """Inspect only this recorded source, never an environment registry."""
+    def source_state(
+        self, name: str, *, inventory: dict[str, Server | None] | None = None
+    ) -> str:
+        """Compare the recorded source with the installed server of this name."""
         prefix = Path(self.prefix)
         if not (prefix / "conda-meta").is_dir():
             return "missing"
         try:
-            server = next(
-                (server for server in discover(prefix) if server.name == name), None
-            )
+            if inventory is None:
+                server = next(iter(discover(prefix, name=name)), None)
+            else:
+                if name in inventory and inventory[name] is None:
+                    return "invalid"
+                server = inventory.get(name)
         except (CondaError, OSError, ValueError):
             return "invalid"
         if server is None:
@@ -297,15 +331,26 @@ def registration(
     source: dict | None = None,
     force: bool = False,
     dry_run: bool = False,
+    _source_cache: dict[str, dict[str, Server | None] | None] | None = None,
 ) -> list[dict] | dict:
     """Inspect or mutate an entry without looking up its source when unlinking."""
     try:
-        preview = _registration(target, name, entry, source, force, write=False)
+        preview = _registration(
+            target, name, entry, source, force, write=False, source_cache=_source_cache
+        )
         if isinstance(preview, list) or dry_run or not preview["changed"]:
             return preview
         lock_path = target.path.with_name(target.path.name + ".conda-mcp.lock")
         with open_lock(lock_path) as stream, lock(stream):
-            return _registration(target, name, entry, source, force, write=True)
+            return _registration(
+                target,
+                name,
+                entry,
+                source,
+                force,
+                write=True,
+                source_cache=_source_cache,
+            )
     except (ValueError, RecursionError) as error:
         raise CondaError(str(error)) from error
 
@@ -318,6 +363,7 @@ def _registration(
     force: bool,
     *,
     write: bool,
+    source_cache: dict[str, dict[str, Server | None] | None] | None,
 ) -> list[dict] | dict:
     """Plan against current files and write only while the caller holds the lock."""
     config = ClientConfig.from_bytes(
@@ -328,6 +374,7 @@ def _registration(
     entries = dict(receipt.entries)
     pending = receipt.pending
     if name is None:
+        inventories = source_cache if source_cache is not None else {}
         result = []
         for key in sorted(
             table.keys() | entries.keys() | ({pending.name} if pending else set())
@@ -344,13 +391,29 @@ def _registration(
                 if record.digest == fingerprint(table[key])
                 else "edited"
             )
+            source_state = "unknown"
+            if record:
+                if record.prefix not in inventories:
+                    prefix = Path(record.prefix)
+                    if not (prefix / "conda-meta").is_dir():
+                        inventories[record.prefix] = {}
+                    else:
+                        try:
+                            inventories[record.prefix] = discover_inventory(prefix)
+                        except (CondaError, OSError, ValueError):
+                            inventories[record.prefix] = None
+                inventory = inventories[record.prefix]
+                # A failed prefix scan invalidates each name without another scan.
+                source_state = record.source_state(
+                    key, inventory=inventory if inventory is not None else {key: None}
+                )
             result.append(
                 {
                     "name": key,
                     "client": target.client,
                     "path": str(target.path),
                     "state": state,
-                    "source_state": record.source_state(key) if record else "unknown",
+                    "source_state": source_state,
                     "shared_clients": target.shared_clients,
                 }
             )
@@ -365,11 +428,16 @@ def _registration(
     old_record = dict(receipt.entries).get(name)
     present = name in table
     before = fingerprint(table[name]) if present else None
+    scope = " --global" if target.global_scope else ""
+    recovery = (
+        f"Inspect with `conda mcp registry --client {target.client}{scope}`. "
+        f"To discard this entry, run `conda mcp unregister {name} "
+        f"--client {target.client}{scope} --force`, then register again."
+        if entry is not None
+        else "Add --force to this unregister command to remove only the selected entry."
+    )
     if present and (old_record is None or old_record.digest != before) and not force:
-        raise CondaError(
-            "Refusing to replace an unmanaged or edited entry. "
-            "Inspect the client registry or use --force."
-        )
+        raise CondaError(f"Refusing to change an unmanaged or edited entry. {recovery}")
     record = (
         ReceiptRecord.from_dict({**(source or {}), "digest": fingerprint(entry)})
         if entry is not None
@@ -382,9 +450,7 @@ def _registration(
             != (record.prefix, record.package, record.manifest)
             and not force
         ):
-            raise CondaError(
-                "Entry belongs to a different provider. Use --force to replace it."
-            )
+            raise CondaError(f"Entry belongs to a different provider. {recovery}")
         if record.source_state(name) != "current":
             raise CondaError("Registration source changed or is unavailable.")
     after = record.digest if record else None

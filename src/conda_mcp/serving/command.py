@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 
 PASSTHROUGH_ARGUMENT = "args"
 TOOL_PREFIX = "conda"
+EXECUTE_TOOL_NAME = "conda_execute"
+COMPLETION_TOOL_NAME = "conda_cli_command"
+MAX_REPEAT_COUNT = 128
 
 
 def canonical_tool_name(
@@ -55,9 +58,17 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
         }[argument.value_type]
     }
     if (
-        not argument.flags
-        and argument.value_type == "string"
-        and argument.nargs != "remainder"
+        argument.value_type == "string"
+        and argument.nargs
+        not in (
+            "parser",
+            "remainder",
+        )
+        and (
+            not argument.flags
+            or argument.nargs not in (None, "?")
+            or argument.action is ActionKind.EXTEND_CONST
+        )
     ):
         scalar["pattern"] = "^(?!-)"
     if argument.choices:
@@ -110,7 +121,11 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
         case ActionKind.BOOLEAN:
             schema = {"type": "boolean"}
         case ActionKind.APPEND_CONST | ActionKind.COUNT:
-            schema = {"type": "integer", "minimum": 1 if argument.required else 0}
+            schema = {
+                "type": "integer",
+                "minimum": 1 if argument.required else 0,
+                "maximum": MAX_REPEAT_COUNT,
+            }
         case ActionKind.EXTEND_CONST:
             schema = {"type": "array", "items": scalar}
 
@@ -122,10 +137,22 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
 
 def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
     """Compile one schema-validated argument value into canonical argv tokens."""
+
+    def token(item: Any) -> str:
+        return str(int(item)) if argument.value_type == "integer" else str(item)
+
     flag = next(
         (candidate for candidate in argument.flags if candidate.startswith("--")),
         argument.flags[0] if argument.flags else None,
     )
+
+    def scalar_tokens(item: Any) -> tuple[str, ...]:
+        value_token = token(item)
+        if flag is None:
+            return (value_token,)
+        if value_token.startswith("-"):
+            return (f"{flag}={value_token}",)
+        return (flag, value_token)
 
     match argument.action:
         case ActionKind.STORE:
@@ -133,32 +160,35 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
             if argument.nargs == "?" and value is None:
                 return prefix
             if argument.nargs in (None, "?"):
-                return (*prefix, str(value))
-            return (*prefix, *(str(item) for item in value))
+                return scalar_tokens(value)
+            return (*prefix, *(token(item) for item in value))
         case ActionKind.APPEND:
             tokens: list[str] = []
             for occurrence in value:
-                if flag:
-                    tokens.append(flag)
                 if argument.nargs == "?" and occurrence is None:
+                    if flag:
+                        tokens.append(flag)
                     continue
                 if argument.nargs in (None, "?"):
-                    tokens.append(str(occurrence))
+                    tokens.extend(scalar_tokens(occurrence))
                 else:
-                    tokens.extend(str(item) for item in occurrence)
+                    if flag:
+                        tokens.append(flag)
+                    tokens.extend(token(item) for item in occurrence)
             return tuple(tokens)
         case ActionKind.EXTEND:
             tokens = []
             if argument.nargs in (None, "?"):
                 for item in value:
-                    if flag:
-                        tokens.append(flag)
-                    if item is not None:
-                        tokens.append(str(item))
+                    if item is None:
+                        if flag:
+                            tokens.append(flag)
+                    else:
+                        tokens.extend(scalar_tokens(item))
                 return tuple(tokens)
             if flag:
                 tokens.append(flag)
-            tokens.extend(str(item) for item in value)
+            tokens.extend(token(item) for item in value)
             return tuple(tokens)
         case ActionKind.STORE_TRUE | ActionKind.STORE_CONST:
             if value:
@@ -203,11 +233,17 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
         case ActionKind.APPEND_CONST | ActionKind.COUNT:
             if flag is None:
                 raise ValueError(f"{argument.id} requires an option flag")
-            return (flag,) * value
+            if (
+                type(value) not in (int, float)
+                or not 0 <= value <= MAX_REPEAT_COUNT
+                or int(value) != value
+            ):
+                raise ValueError(f"{argument.id} repeat count is out of range")
+            return (flag,) * int(value)
         case ActionKind.EXTEND_CONST:
             if flag is None:
                 raise ValueError(f"{argument.id} requires an option flag")
-            return (flag, *(str(item) for item in value))
+            return (flag, *(token(item) for item in value))
 
 
 def argument_active_schema(
@@ -416,10 +452,10 @@ def command_tools(program: Program) -> tuple[CommandTool, ...]:
         blocked = affected or any(node.raw_only for node in current)
         unknown = any(node.name is None for node in current[1:])
 
-        # ponytail: `mcp serve` would start a nested long-lived server.
+        # Stdio launchers need a client to supply protocol input.
         if (
             path
-            and path != ("mcp", "serve")
+            and path not in {("mcp", "run"), ("mcp", "serve")}
             and command.terminal
             and not blocked
             and not unknown
@@ -430,12 +466,20 @@ def command_tools(program: Program) -> tuple[CommandTool, ...]:
 
     visit(program.root, ())
 
-    name_counts: dict[str, int] = {}
-    for tool in tools:
-        name_counts[tool.name] = name_counts.get(tool.name, 0) + 1
-    tools = [
-        replace(tool, disambiguate_name=True) if name_counts[tool.name] > 1 else tool
-        for tool in tools
-    ]
-
-    return tuple(tools)
+    reserved = {EXECUTE_TOOL_NAME, COMPLETION_TOOL_NAME}
+    while True:
+        name_counts: dict[str, int] = {}
+        for tool in tools:
+            name_counts[tool.name] = name_counts.get(tool.name, 0) + 1
+        collisions = {name for name, count in name_counts.items() if count > 1}
+        if not collisions and not reserved.intersection(name_counts):
+            return tuple(tools)
+        updated = [
+            replace(tool, disambiguate_name=True)
+            if tool.name in collisions | reserved and not tool.disambiguate_name
+            else tool
+            for tool in tools
+        ]
+        if updated == tools:
+            raise ValueError("Generated tool names remain ambiguous")
+        tools = updated

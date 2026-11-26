@@ -59,9 +59,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(conda workspace run -e build -- python -m hatchling version)" = "$RELEASE_TAG"
-      - run: conda task run -e build build
-      - run: conda task run -e build check-dist
-      - run: conda task run -e build test-wheel
+      - run: conda task run build
+      - run: conda task run check-dist
+      - run: conda task run test-wheel
       - name: Validate exact distributions and record source digest
         id: artifacts
         env:

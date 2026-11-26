@@ -248,7 +248,10 @@ def _create_parents(path: Path) -> tuple[int, str, list[tuple[Path, os.stat_resu
             try:
                 child = os.open(part, flags, dir_fd=descriptor)
             except FileNotFoundError:
-                os.mkdir(part, 0o700, dir_fd=descriptor)
+                try:
+                    os.mkdir(part, 0o700, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
                 child = os.open(part, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = child

@@ -234,6 +234,82 @@ def test_protocol_streams_before_exit_and_receives_eof(executable_server):
             process.communicate(timeout=5)
 
 
+def test_run_ignores_unrelated_invalid_declaration(
+    executable_server: Path, install_package
+) -> None:
+    install_package(
+        "broken",
+        files={"share/conda-mcp/servers/broken.json": b"{}"},
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", str(PROBE), str(executable_server)],
+        input=b"PROTOCOL\n",
+        capture_output=True,
+        timeout=30,
+        env={**os.environ, "MCP_TEST_TOKEN": ""},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == b"READY\nPROTOCOL\nEOF\n"
+
+
+def test_direct_run_keeps_plugin_output_off_protocol(
+    executable_server: Path, noisy_conda_venv: Path
+) -> None:
+    completed = subprocess.run(
+        [
+            str(noisy_conda_venv),
+            "-I",
+            "-m",
+            "conda_mcp._stdio",
+            "run",
+            "-p",
+            str(executable_server),
+            "--package",
+            "provider",
+            "example",
+        ],
+        input=b"PROTOCOL\n",
+        capture_output=True,
+        timeout=30,
+        env={
+            **os.environ,
+            "MCP_TEST_TOKEN": "",
+            # Activation scripts belong to the conda install, not the test venv.
+            "CONDA_ROOT_PREFIX": sys.prefix,
+        },
+    )
+
+    assert completed.returncode == 0, completed.stderr.decode(errors="replace")
+    assert completed.stdout == b"READY\nPROTOCOL\nEOF\n"
+    assert b"NOISY_CONDA_PLUGIN" not in completed.stdout
+    assert b"NOISY_CONDA_PLUGIN" in completed.stderr
+
+
+def test_direct_run_rejects_a_different_provider(executable_server: Path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-m",
+            "conda_mcp._stdio",
+            "run",
+            "-p",
+            str(executable_server),
+            "--package",
+            "another-provider",
+            "example",
+        ],
+        input=b"PROTOCOL\n",
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    assert b"The installed manifest belongs to a different package." in completed.stderr
+
+
 @pytest.mark.skipif(on_win, reason="POSIX deactivation script")
 def test_exit_status_survives_deactivation_and_argv_is_literal(
     executable_server, tmp_path

@@ -20,7 +20,7 @@ def execute(args) -> int:
     if server.stdio:
         server.resolve_executable()
     document = server.to_dict()
-    entry = render_entry(server, target)
+    entry = render_entry(server, target, tuple(args.arguments))
     source = {
         key: document[key]
         for key in (

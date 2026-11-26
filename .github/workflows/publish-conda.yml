@@ -67,7 +67,7 @@ jobs:
           set -euo pipefail
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 120 --connect-timeout 10 --max-time 60 "https://files.pythonhosted.org/packages/source/c/conda_mcp/conda_mcp-${RELEASE_TAG}.tar.gz" -o "$RUNNER_TEMP/release-source.tar.gz"
           printf '%s  %s\n' "$CONDA_MCP_SOURCE_SHA256" "$RUNNER_TEMP/release-source.tar.gz" | sha256sum -c -
-      - run: conda task run -e build build-conda
+      - run: conda task run build-conda
       - name: Check package artifact
         run: |
           shopt -s nullglob

@@ -43,9 +43,15 @@ def config_target(client: str, root: Path, *, global_scope: bool) -> ConfigTarge
         raise CondaError(str(error)) from error
 
 
-def render_entry(server: Server, target: ConfigTarget) -> dict[str, object]:
+def render_entry(
+    server: Server, target: ConfigTarget, arguments: tuple[str, ...] = ()
+) -> dict[str, object]:
     """Translate package declarations into native input without reading secrets."""
     try:
+        if any(not isinstance(value, str) or "\0" in value for value in arguments):
+            raise ValueError("Invalid server startup arguments.")
+        if arguments and server.stdio is None:
+            raise ValueError("Startup arguments require a stdio server.")
         if server.stdio is not None:
             if not server.prefix.is_absolute():
                 raise ValueError("Launch paths must be absolute.")
@@ -55,14 +61,14 @@ def render_entry(server: Server, target: ConfigTarget) -> dict[str, object]:
                     sys.executable,
                     "-I",
                     "-m",
-                    "conda",
-                    "mcp",
+                    "conda_mcp._stdio",
                     "run",
                     "-p",
                     str(server.prefix),
                     "--package",
                     server.package,
                     server.name,
+                    *(("--", *arguments) if arguments else ()),
                 ),
                 environment=tuple(item.name for item in server.stdio.environment),
             )

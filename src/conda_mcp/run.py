@@ -132,10 +132,7 @@ class LaunchPayload:
         """Verify post-activation inputs and return the freshly checked executable."""
         if os.environ.get("CONDA_PREFIX") != self.prefix:
             raise CondaError("Conda activation selected an unexpected prefix.")
-        server = next(
-            (item for item in discover(Path(self.prefix)) if item.name == self.name),
-            None,
-        )
+        server = next(iter(discover(Path(self.prefix), name=self.name)), None)
         if server is None or (
             server.package,
             str(server.manifest),
@@ -179,7 +176,9 @@ class LaunchPayload:
                     os.close(descriptor)
 
 
-def run(server: Server, arguments: tuple[str, ...]) -> int:
+def run(
+    server: Server, arguments: tuple[str, ...], *, protocol_stdout: int | None = None
+) -> int:
     """Activate the validated server prefix and execute its stdio executable."""
     if server.stdio is None:
         raise CondaError("Only stdio servers can be launched.")
@@ -193,7 +192,7 @@ def run(server: Server, arguments: tuple[str, ...]) -> int:
     process: subprocess.Popen[bytes] | _launch_windows._Process | None = None
     try:
         stdin = os.dup(0)
-        stdout = os.dup(1)
+        stdout = os.dup(1 if protocol_stdout is None else protocol_stdout)
         info = executable.stat()
         payload = LaunchPayload(
             (str(executable), *server.stdio.args, *arguments),

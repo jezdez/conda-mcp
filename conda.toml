@@ -60,7 +60,7 @@ python = "3.14.*"
 sphinx = ">=8"
 myst-parser = ">=4"
 conda-sphinx-theme = ">=0.3"
-sphinx-design = ">=0.6"
+sphinx-design = ">=0.8"
 
 [feature.build.dependencies]
 conda-build = ">=26.9"

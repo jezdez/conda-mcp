@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from typing import Any
+from typing import Literal
 
 JsonScalar = str | int | float | bool | None
 JsonValue = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
@@ -95,17 +91,6 @@ class Plugin:
             "hooks": list(self.hooks),
         }
 
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Plugin:
-        """Restore plugin metadata from its JSON-compatible representation."""
-        return cls(
-            distribution=data["distribution"],
-            version=data["version"],
-            entry_point=data["entry_point"],
-            value=data["value"],
-            hooks=tuple(data["hooks"]),
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class Argument:
@@ -139,23 +124,6 @@ class Argument:
             "hidden": self.hidden,
         }
 
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Argument:
-        """Restore an argument from its JSON-compatible representation."""
-        return cls(
-            id=data["id"],
-            dest=data["dest"],
-            flags=tuple(data["flags"]),
-            action=ActionKind(data["action"]),
-            nargs=data["nargs"],
-            value_type=data["value_type"],
-            required=data["required"],
-            choices=tuple(data["choices"]),
-            metavar=tuple(data["metavar"]),
-            help=data["help"],
-            hidden=data["hidden"],
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class ExclusiveGroup:
@@ -167,14 +135,6 @@ class ExclusiveGroup:
     def as_dict(self) -> dict[str, JsonValue]:
         """Return a JSON-compatible representation."""
         return {"members": list(self.members), "required": self.required}
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ExclusiveGroup:
-        """Restore a mutually exclusive group from JSON-compatible data."""
-        return cls(
-            members=tuple(data["members"]),
-            required=data["required"],
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,23 +165,6 @@ class Command:
             "raw_only": self.raw_only,
         }
 
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Command:
-        """Restore a command tree from JSON-compatible data."""
-        return cls(
-            name=data["name"],
-            aliases=tuple(data["aliases"]),
-            summary=data["summary"],
-            arguments=tuple(Argument.from_dict(item) for item in data["arguments"]),
-            exclusive_groups=tuple(
-                ExclusiveGroup.from_dict(item) for item in data["exclusive_groups"]
-            ),
-            children=tuple(Command.from_dict(item) for item in data["children"]),
-            terminal=data["terminal"],
-            passthrough=data["passthrough"],
-            raw_only=data["raw_only"],
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class Diagnostic:
@@ -238,15 +181,6 @@ class Diagnostic:
             "reason": self.reason,
             "action_type": self.action_type,
         }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Diagnostic:
-        """Restore a diagnostic from JSON-compatible data."""
-        return cls(
-            path=tuple(data["path"]),
-            reason=data["reason"],
-            action_type=data["action_type"],
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,25 +200,3 @@ class Program:
             "root": self.root.as_dict() if self.root is not None else None,
             "diagnostics": [diagnostic.as_dict() for diagnostic in self.diagnostics],
         }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Program:
-        """Restore a catalog from JSON-compatible data."""
-        root = data["root"]
-        return cls(
-            prog=data["prog"],
-            conda_version=data["conda_version"],
-            root=Command.from_dict(root) if root is not None else None,
-            diagnostics=tuple(
-                Diagnostic.from_dict(item) for item in data["diagnostics"]
-            ),
-        )
-
-    def to_json(self) -> str:
-        """Serialize the complete catalog as deterministic JSON."""
-        return json.dumps(self.as_dict(), separators=(",", ":"), sort_keys=True)
-
-    @classmethod
-    def from_json(cls, payload: str) -> Program:
-        """Restore a complete catalog from JSON."""
-        return cls.from_dict(json.loads(payload))

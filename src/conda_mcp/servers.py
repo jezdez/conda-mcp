@@ -6,7 +6,9 @@ import hashlib
 import re
 import stat
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlsplit
 
 from conda import CondaError
@@ -14,32 +16,21 @@ from conda.activate import PosixActivator
 from conda.common.compat import on_win
 from conda.core.prefix_data import PrefixData
 from conda.models.records import PrefixRecord
+from jsonschema import Draft202012Validator
 
 from .files import load_json, read_bytes
 
+if TYPE_CHECKING:
+    from typing import Any
+
 _PATH = re.compile(r"share/conda-mcp/servers/([a-z0-9][a-z0-9_-]{0,63})\.json")
-_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
-_VARIABLE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-_COMMAND = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
-_HEADER = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
-_RESERVED = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])", re.IGNORECASE)
-_FORBIDDEN_HEADERS = frozenset(
-    {
-        "host",
-        "connection",
-        "content-length",
-        "transfer-encoding",
-        "upgrade",
-        "te",
-        "trailer",
-        "keep-alive",
-        "accept",
-        "content-type",
-        "authorization",
-        "cookie",
-        "set-cookie",
-    }
+_SCHEMA = cast(
+    "dict[str, Any]",
+    load_json(files("conda_mcp").joinpath("schema/server-v1.json").read_bytes()),
 )
+_MANIFEST = Draft202012Validator(_SCHEMA)
+_STDIO = _MANIFEST.evolve(schema=_SCHEMA["properties"]["stdio"])
+_HTTP = _MANIFEST.evolve(schema=_SCHEMA["properties"]["http"])
 
 
 @dataclass(frozen=True)
@@ -48,19 +39,6 @@ class EnvironmentVariable:
 
     name: str
     required: bool
-
-    @classmethod
-    def from_dict(cls, value: object) -> EnvironmentVariable:
-        """Create a declaration from one exact manifest object."""
-        if (
-            not isinstance(value, dict)
-            or value.keys() != {"name", "required"}
-            or not isinstance(name := value.get("name"), str)
-            or not _VARIABLE.fullmatch(name)
-            or type(required := value.get("required")) is not bool
-        ):
-            raise ValueError("invalid environment declaration")
-        return cls(name, required)
 
 
 @dataclass(frozen=True)
@@ -74,27 +52,14 @@ class Stdio:
     @classmethod
     def from_dict(cls, value: object) -> Stdio:
         """Create a validated stdio declaration from a manifest transport object."""
-        if (
-            not isinstance(value, dict)
-            or value.keys() - {"command", "args", "environment"}
-            or not isinstance(command := value.get("command"), str)
-            or not _COMMAND.fullmatch(command)
-            or _RESERVED.fullmatch(command)
-            or command.lower().endswith((".bat", ".cmd"))
-        ):
+        if not isinstance(value, dict) or not _STDIO.is_valid(value):
             raise ValueError("invalid stdio declaration")
-        args = value.get("args", [])
-        environment = value.get("environment", [])
-        if (
-            not isinstance(args, list)
-            or any(not isinstance(item, str) or "\0" in item for item in args)
-            or not isinstance(environment, list)
-        ):
-            raise ValueError("invalid stdio declaration")
-        variables = tuple(EnvironmentVariable.from_dict(item) for item in environment)
+        variables = tuple(
+            EnvironmentVariable(**item) for item in value.get("environment", [])
+        )
         if len({item.name.casefold() for item in variables}) != len(variables):
             raise ValueError("invalid environment declaration")
-        return cls(command, tuple(args), variables)
+        return cls(value["command"], tuple(value.get("args", [])), variables)
 
 
 @dataclass(frozen=True)
@@ -108,16 +73,10 @@ class Http:
     @classmethod
     def from_dict(cls, value: object) -> Http:
         """Create a validated HTTPS declaration from a manifest transport object."""
-        if (
-            not isinstance(value, dict)
-            or value.keys() - {"url", "bearer_token_env", "header_env"}
-            or not isinstance(url := value.get("url"), str)
-            or any(
-                ord(char) <= 32 or ord(char) == 127 or char in "\\{}" for char in url
-            )
-            or "?" in url
-            or "#" in url
-        ):
+        if not isinstance(value, dict) or not _HTTP.is_valid(value):
+            raise ValueError("invalid endpoint")
+        url = value["url"]
+        if any(ord(char) <= 32 or ord(char) == 127 for char in url):
             raise ValueError("invalid endpoint")
         try:
             parsed = urlsplit(url)
@@ -132,30 +91,10 @@ class Http:
             or port == 0
         ):
             raise ValueError("invalid endpoint")
-        bearer = value.get("bearer_token_env")
-        headers = value.get("header_env", {})
-        if (
-            bearer is not None
-            and (not isinstance(bearer, str) or not _VARIABLE.fullmatch(bearer))
-            or not isinstance(headers, dict)
-        ):
-            raise ValueError("invalid credential reference")
-        pairs = tuple(headers.items())
-        seen: set[str] = set()
-        for header, variable in pairs:
-            lower = header.lower() if isinstance(header, str) else ""
-            if not isinstance(header, str) or not _HEADER.fullmatch(header):
-                raise ValueError("invalid header reference")
-            if (
-                lower in seen
-                or lower in _FORBIDDEN_HEADERS
-                or lower.startswith(("proxy-", "mcp-"))
-                or not isinstance(variable, str)
-                or not _VARIABLE.fullmatch(variable)
-            ):
-                raise ValueError("invalid header reference")
-            seen.add(lower)
-        return cls(url, bearer, pairs)
+        pairs = tuple(value.get("header_env", {}).items())
+        if len({header.lower() for header, _ in pairs}) != len(pairs):
+            raise ValueError("invalid header reference")
+        return cls(url, value.get("bearer_token_env"), pairs)
 
 
 @dataclass(frozen=True)
@@ -187,39 +126,18 @@ class Server:
             raw = read_bytes(path)
             assert raw is not None
             document = load_json(raw)
-            allowed = {
-                "schema_version",
-                "name",
-                "description",
-                "registry_name",
-                "stdio",
-                "http",
-            }
-            name = document.get("name")
-            description = document.get("description")
-            registry_name = document.get("registry_name")
             if (
-                document.keys() - allowed
+                not _MANIFEST.is_valid(document)
                 or type(document.get("schema_version")) is not int
-                or document.get("schema_version") != 1
-                or not isinstance(name, str)
-                or not _NAME.fullmatch(name)
-                or _RESERVED.fullmatch(name)
-                or name != match.group(1)
-                or not isinstance(description, str)
-                or not 1 <= len(description) <= 1024
-                or not description.strip()
-                or "registry_name" in document
-                and not isinstance(registry_name, str)
-                or len(document.keys() & {"stdio", "http"}) != 1
+                or document["name"] != match.group(1)
             ):
                 raise ValueError("invalid manifest")
-            registry_name = registry_name if isinstance(registry_name, str) else None
+            document = cast("dict[str, Any]", document)
             stdio = Stdio.from_dict(document["stdio"]) if "stdio" in document else None
             http = Http.from_dict(document["http"]) if "http" in document else None
             return cls(
-                name,
-                description,
+                document["name"],
+                document["description"],
                 prefix,
                 path,
                 hashlib.sha256(raw).hexdigest(),
@@ -229,7 +147,7 @@ class Server:
                 str(record.channel or ""),
                 stdio,
                 http,
-                registry_name,
+                document.get("registry_name"),
             )
         except (OSError, ValueError, TypeError, RecursionError) as exc:
             raise CondaError(
@@ -278,7 +196,7 @@ class Server:
 
     def revalidate(self) -> Server:
         """Reload this manifest and require unchanged owner and content digest."""
-        for server in discover(self.prefix):
+        for server in discover(self.prefix, name=self.name):
             if server.name == self.name:
                 if (
                     server.manifest.relative_to(server.prefix),
@@ -323,7 +241,7 @@ class Server:
                     target = resolved.relative_to(self.prefix).as_posix()
                     if (
                         len(owners) != 1
-                        or candidate.is_symlink()
+                        or resolved != candidate
                         and sum(target in record.files for record in records) != 1
                     ):
                         continue
@@ -335,8 +253,8 @@ class Server:
         raise CondaError("Server executable is missing or ambiguously owned.")
 
 
-def discover(prefix: Path) -> list[Server]:
-    """Discover recorded manifests in an existing prefix, sorted by server name."""
+def discover(prefix: Path, *, name: str | None = None) -> list[Server]:
+    """Validate recorded declarations, optionally selecting one server name."""
     prefix = prefix.resolve()
     data = PrefixData(prefix, interoperability=False)
     data.assert_environment()
@@ -344,6 +262,8 @@ def discover(prefix: Path) -> list[Server]:
     for record in data.reload().iter_records():
         for relative in record.files:
             if match := _PATH.fullmatch(relative):
+                if name is not None and match.group(1) != name:
+                    continue
                 if match.group(1) in servers:
                     raise CondaError(
                         f"Invalid or duplicate MCP declaration: {match.group(1)}"
@@ -352,3 +272,25 @@ def discover(prefix: Path) -> list[Server]:
                     prefix, record, prefix / relative
                 )
     return [servers[name] for name in sorted(servers)]
+
+
+def discover_inventory(prefix: Path) -> dict[str, Server | None]:
+    """Scan a prefix once, keeping invalid declarations separate by name."""
+    prefix = prefix.resolve()
+    data = PrefixData(prefix, interoperability=False)
+    data.assert_environment()
+    servers: dict[str, Server | None] = {}
+    for record in data.reload().iter_records():
+        for relative in record.files:
+            if match := _PATH.fullmatch(relative):
+                name = match.group(1)
+                if name in servers:
+                    servers[name] = None
+                    continue
+                try:
+                    servers[name] = Server.from_manifest(
+                        prefix, record, prefix / relative
+                    )
+                except CondaError:
+                    servers[name] = None
+    return servers

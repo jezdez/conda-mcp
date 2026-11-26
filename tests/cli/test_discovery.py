@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import stat
 
+import pytest
+
 
 def test_installed_list_reports_package_and_transport(cli, install_package):
     prefix = install_package(
@@ -84,3 +86,30 @@ def test_render_rejects_missing_recorded_executable(cli, install_package, tmp_pa
     assert result.returncode != 0
     assert "traceback" not in json.loads(result.stdout)
     assert not (tmp_path / "project/.codex").exists()
+
+
+@pytest.mark.parametrize("other", ["invalid", "duplicate"])
+def test_selected_server_ignores_unrelated_broken_declarations(
+    cli, install_package, other
+):
+    manifest = {
+        "schema_version": 1,
+        "name": "demo",
+        "description": "Valid server",
+        "http": {"url": "https://example.org/mcp"},
+    }
+    prefix = install_package(manifest=manifest)
+    broken = {**manifest, "name": "broken"}
+    if other == "invalid":
+        broken["schema_version"] = 999
+    install_package("other", manifest=broken)
+    if other == "duplicate":
+        install_package("duplicate", manifest=broken)
+    inspected = cli("inspect", "demo", "-p", str(prefix), "--json")
+    assert inspected.returncode == 0, inspected.stdout
+    assert json.loads(inspected.stdout)["name"] == "demo"
+    registered = cli("register", "demo", "-p", str(prefix), "--client", "cursor")
+    assert registered.returncode == 0, registered.stdout
+    state = cli("registry", "--client", "cursor", "--json")
+    assert json.loads(state.stdout)[0]["source_state"] == "current"
+    assert cli("list", "-p", str(prefix), "--json").returncode != 0

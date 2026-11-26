@@ -12,6 +12,8 @@ import anyio
 import pytest
 from conda.common.compat import on_win
 
+from conda_mcp.serving.capabilities import plugin_fingerprint
+from conda_mcp.serving.discovery import discover_plugins
 from conda_mcp.serving.execution import CompletionQueryError, CondaExecutor
 
 
@@ -140,6 +142,45 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.anyio
+async def test_plugin_fingerprint_probe_runs_in_child(monkeypatch, tmp_path) -> None:
+    executor = CondaExecutor(Path(sys.executable))
+    execute_process = CondaExecutor._execute_process
+    result = None
+
+    async def capture_result(*args, **kwargs):
+        nonlocal result
+        result = await execute_process(*args, **kwargs)
+        return result
+
+    monkeypatch.setattr(CondaExecutor, "_execute_process", capture_result)
+    expected = plugin_fingerprint(*discover_plugins())
+    shadow = tmp_path / "conda_mcp" / "serving"
+    shadow.mkdir(parents=True)
+    (shadow.parent / "__init__.py").touch()
+    (shadow / "__init__.py").touch()
+    marker = tmp_path / "shadow-imported"
+    (shadow / "_plugin_probe.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).touch()\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    def fail_parent_discovery():
+        raise AssertionError("loaded a plugin in the server process")
+
+    monkeypatch.setattr(
+        "conda_mcp.serving.discovery.discover_plugins", fail_parent_discovery
+    )
+
+    try:
+        fingerprint = await executor.probe_plugin_fingerprint()
+    except RuntimeError as error:
+        pytest.fail(f"{error}: {result!r}")
+
+    assert fingerprint == expected
+    assert not marker.exists()
+
+
+@pytest.mark.anyio
 async def test_execute_preserves_json_and_argv(
     fake_conda: tuple[CondaExecutor, Path],
 ) -> None:
@@ -194,6 +235,8 @@ async def test_execute_supports_cwd_and_stdin(
         ("NaN", None),
         ("Infinity", None),
         ("-Infinity", None),
+        ('{"value": 1e400}', None),
+        ("[" * 80 + "0" + "]" * 80, None),
     ],
 )
 async def test_execute_parses_exactly_one_json_document(
@@ -293,6 +336,7 @@ async def test_execute_timeout_kills_a_child_that_ignores_termination(
     assert not survived.exists()
 
 
+@pytest.mark.skipif(not on_win, reason="Windows job cleanup")
 @pytest.mark.anyio
 async def test_execute_timeout_bounds_inherited_pipe_drain(
     fake_conda: tuple[CondaExecutor, Path],
@@ -310,6 +354,52 @@ async def test_execute_timeout_bounds_inherited_pipe_drain(
 
     assert result.timed_out
     assert elapsed < 0.3
+    assert not survived.exists()
+
+
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
+@pytest.mark.anyio
+async def test_successful_command_closes_inherited_pipes_promptly(
+    tmp_path: Path,
+) -> None:
+    executor = CondaExecutor(Path(sys.executable), timeout_seconds=5)
+    started = tmp_path / "inherited-descendant-started"
+    script = tmp_path / "inherited_pipes.py"
+    script.write_text(
+        "import subprocess, sys, time\n"
+        "from pathlib import Path\n"
+        "if len(sys.argv) > 2:\n"
+        "    Path(sys.argv[1]).touch()\n"
+        "    time.sleep(60)\n"
+        "else:\n"
+        "    subprocess.Popen([sys.executable, __file__, sys.argv[1], 'child'])\n"
+        "    while not Path(sys.argv[1]).exists():\n"
+        "        time.sleep(0.01)\n"
+    )
+
+    result = await executor.execute([str(script), str(started)])
+
+    assert started.exists()
+    assert result.exit_code == 0
+    assert not result.timed_out
+    assert not result.stdout_truncated
+    assert not result.stderr_truncated
+
+
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
+@pytest.mark.anyio
+async def test_successful_command_reaps_child_after_pipes_close(
+    fake_conda: tuple[CondaExecutor, Path],
+    tmp_path: Path,
+) -> None:
+    executor, script = fake_conda
+    survived = tmp_path / "successful-descendant-survived"
+
+    result = await executor.execute([str(script), "closed-pipes-child", str(survived)])
+    await asyncio.sleep(0.7)
+
+    assert result.exit_code == 0
+    assert not result.timed_out
     assert not survived.exists()
 
 

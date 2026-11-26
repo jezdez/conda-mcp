@@ -257,6 +257,31 @@ def test_open_lock_creates_missing_parents_and_regular_private_leaf(tmp_path: Pa
         lock.write(b"locked")
 
     assert path.read_bytes() == b"locked"
+
+
+@pytest.mark.skipif(on_win, reason="POSIX descriptor parent creation")
+def test_open_lock_accepts_parent_created_by_another_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "nested" / "state.lock"
+    mkdir = os.mkdir
+    raced = False
+
+    def create_first(name: str, mode: int = 0o777, *, dir_fd: int | None = None):
+        nonlocal raced
+        if name == "nested" and dir_fd is not None and not raced:
+            raced = True
+            mkdir(name, mode, dir_fd=dir_fd)
+            raise FileExistsError("another writer created the directory")
+        return mkdir(name, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(files.os, "mkdir", create_first)
+
+    with open_lock(path):
+        pass
+
+    assert raced
+    assert path.is_file()
     assert path.stat().st_mode & 0o777 == 0o600
 
 

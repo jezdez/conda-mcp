@@ -286,6 +286,30 @@ def test_direct_run_keeps_plugin_output_off_protocol(
     assert b"NOISY_CONDA_PLUGIN" in completed.stderr
 
 
+def test_direct_run_rejects_a_different_provider(executable_server: Path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-m",
+            "conda_mcp._stdio",
+            "run",
+            "-p",
+            str(executable_server),
+            "--package",
+            "another-provider",
+            "example",
+        ],
+        input=b"PROTOCOL\n",
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    assert b"The installed manifest belongs to a different package." in completed.stderr
+
+
 @pytest.mark.skipif(on_win, reason="POSIX deactivation script")
 def test_exit_status_survives_deactivation_and_argv_is_literal(
     executable_server, tmp_path

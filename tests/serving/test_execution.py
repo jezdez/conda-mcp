@@ -293,6 +293,7 @@ async def test_execute_timeout_kills_a_child_that_ignores_termination(
     assert not survived.exists()
 
 
+@pytest.mark.skipif(not on_win, reason="Windows job cleanup")
 @pytest.mark.anyio
 async def test_execute_timeout_bounds_inherited_pipe_drain(
     fake_conda: tuple[CondaExecutor, Path],
@@ -310,6 +311,47 @@ async def test_execute_timeout_bounds_inherited_pipe_drain(
 
     assert result.timed_out
     assert elapsed < 0.3
+    assert not survived.exists()
+
+
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
+@pytest.mark.anyio
+async def test_successful_command_closes_inherited_pipes_promptly(
+    fake_conda: tuple[CondaExecutor, Path],
+    tmp_path: Path,
+) -> None:
+    executor, script = fake_conda
+    survived = tmp_path / "inherited-descendant-survived"
+    started = time.monotonic()
+
+    result = await executor.execute(
+        [str(script), "inherited-pipes", str(survived)], timeout_seconds=1
+    )
+    elapsed = time.monotonic() - started
+    await asyncio.sleep(0.55)
+
+    assert result.exit_code == 0
+    assert not result.timed_out
+    assert elapsed < 0.4
+    assert not survived.exists()
+
+
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
+@pytest.mark.anyio
+async def test_successful_command_reaps_child_after_pipes_close(
+    fake_conda: tuple[CondaExecutor, Path],
+    tmp_path: Path,
+) -> None:
+    executor, script = fake_conda
+    survived = tmp_path / "successful-descendant-survived"
+
+    result = await executor.execute(
+        [str(script), "closed-pipes-child", str(survived)]
+    )
+    await asyncio.sleep(0.7)
+
+    assert result.exit_code == 0
+    assert not result.timed_out
     assert not survived.exists()
 
 

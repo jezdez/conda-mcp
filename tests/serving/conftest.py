@@ -58,6 +58,22 @@ elif command == "inherited-pipes":
         "Path(sys.argv[1]).write_text('survived')",
         sys.argv[2],
     ])
+    time.sleep(0.2)
+elif command == "closed-pipes-child":
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import sys, time\\n"
+            "from pathlib import Path\\n"
+            "time.sleep(0.5)\\n"
+            "Path(sys.argv[1]).write_text('survived')",
+            sys.argv[2],
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 elif command == "serialize":
     log = Path(sys.argv[2])
     token = sys.argv[3]

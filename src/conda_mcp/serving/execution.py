@@ -451,7 +451,17 @@ class CondaExecutor:
                 await await_windows_cleanup(cleanup_task)
 
             try:
-                _, pending = await asyncio.wait(tasks, timeout=timeout)
+                if on_win:
+                    _, pending = await asyncio.wait(tasks, timeout=timeout)
+                else:
+                    deadline = time.monotonic() + timeout
+                    _, pending = await asyncio.wait((wait_task,), timeout=timeout)
+                    if not pending:
+                        with anyio.CancelScope(shield=True):
+                            await stop_process()
+                        _, pending = await asyncio.wait(
+                            tasks, timeout=max(0, deadline - time.monotonic())
+                        )
                 if pending:
                     timed_out = True
                     if on_win:

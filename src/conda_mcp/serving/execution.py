@@ -5,8 +5,10 @@ import codecs
 import json
 import math
 import os
+import re
 import signal
 import subprocess
+import sys
 import sysconfig
 import time
 from contextlib import suppress
@@ -143,6 +145,23 @@ class CondaExecutor:
         from .discovery import discover_plugins
 
         return discover_plugins()
+
+    async def probe_plugin_fingerprint(self) -> str:
+        """Inspect installed plugin hooks outside the MCP server process."""
+        result = await self._execute_process(
+            (sys.executable, "-I", "-m", "conda_mcp.serving._plugin_probe"),
+            cwd=None,
+            stdin=None,
+            timeout=min(self.timeout_seconds, 30),
+        )
+        digest = result.stdout.strip()
+        if (
+            result.exit_code != 0
+            or result.stdout_truncated
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        ):
+            raise RuntimeError("plugin probe failed")
+        return digest
 
     async def inspect_completion_command(
         self,

@@ -56,7 +56,7 @@ Raw argv still passes through permission checks. Enabling this tool does not ena
 | `catalog` | Command tree, arguments, aliases, and discovery diagnostics. |
 | `generated_tools` | Canonical structured tool names. |
 | `plugins` | External conda entry-point distributions, versions, values, and detected hooks. |
-| `discovery_fingerprint` | Digest of the conda version and plugin metadata used to detect restart-sensitive changes. |
+| `discovery_fingerprint` | Digest of the startup conda version and plugin metadata, including detected hooks. |
 
 The catalogue may contain diagnostics even when the server starts successfully. It does not include credentials, authentication objects, request headers, or complete process environments. Executable paths and installed plugin metadata are visible to the connected client.
 
@@ -109,7 +109,7 @@ The MCP response carries these fields in `structuredContent`. Text content inclu
 
 Output streams are drained after their retention limits are reached. UTF-8 truncation preserves complete characters. Conda executions are serialised within one server process.
 
-After a successful operation classified as a write or execution, the server compares conda and plugin metadata with its startup fingerprint. A changed fingerprint, or a failed reinspection, sets `restart_required`. Once set, it remains true for subsequent results. Tool lists and the capabilities resource do not refresh in place. See {doc}`../how-to/refresh-plugin-tools`.
+After a successful operation classified as a write or execution, a child Python process checks the installed conda version and plugin hooks against the startup fingerprint. The live MCP server does not import the updated plugin code. A changed fingerprint, or a failed check, sets `restart_required`. Once set, it remains true for subsequent results. Tool lists and the capabilities resource do not refresh in place. See {doc}`../how-to/refresh-plugin-tools`.
 
 ## Errors and cancellation
 

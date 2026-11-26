@@ -9,7 +9,7 @@ import pytest
 from mcp import Client, MCPError
 from mcp.types import INVALID_PARAMS, INVALID_REQUEST
 
-from conda_mcp.serving.capabilities import Capabilities
+from conda_mcp.serving.capabilities import Capabilities, plugin_fingerprint
 from conda_mcp.serving.execution import CompletionQueryError
 from conda_mcp.serving.models import (
     ActionKind,
@@ -43,7 +43,7 @@ class RecordingExecutor:
     calls: list[tuple[str, ...]] = field(default_factory=list)
     plugins: tuple[Plugin, ...] = ()
     exit_code: int = 0
-    plugin_state_calls: int = 0
+    plugin_fingerprint_calls: int = 0
     completion_calls: list[tuple[str, ...]] = field(default_factory=list)
     timeout_seconds: float = 900
 
@@ -61,9 +61,9 @@ class RecordingExecutor:
             parsed_json={"ok": True},
         )
 
-    async def discover_plugin_state(self) -> tuple[str, tuple[Plugin, ...]]:
-        self.plugin_state_calls += 1
-        return "26.7", self.plugins
+    async def probe_plugin_fingerprint(self) -> str:
+        self.plugin_fingerprint_calls += 1
+        return plugin_fingerprint("26.7", self.plugins)
 
     async def inspect_completion_command(
         self,
@@ -364,7 +364,31 @@ async def test_successful_mutation_reports_restart_without_changing_tools(
     assert "Restart the MCP server" in changed.content[0].text
     assert read.structured_content["restart_required"] is True
     assert [tool.name for tool in before.tools] == [tool.name for tool in after.tools]
-    assert executor.plugin_state_calls == 1
+    assert executor.plugin_fingerprint_calls == 1
+
+
+@pytest.mark.anyio
+async def test_restart_check_detects_hook_changes_without_metadata_changes() -> None:
+    initial = Plugin("example", "1", "plugin", "example.plugin", ("conda_solvers",))
+    executor = RecordingExecutor(
+        plugins=(Plugin("example", "1", "plugin", "example.plugin"),)
+    )
+    program = Program(
+        prog="conda",
+        conda_version="26.7",
+        root=Command(name=None, terminal=False, children=(Command(name="install"),)),
+    )
+    server = CondaMCPServer(  # type: ignore[arg-type]
+        executor,
+        Capabilities("conda", program, (initial,)),
+        SafetyPolicy(allow_write=True),
+    )
+
+    async with Client(server.server) as client:
+        result = await client.call_tool("conda_install", {})
+
+    assert result.structured_content["restart_required"] is True
+    assert executor.plugin_fingerprint_calls == 1
 
 
 @pytest.mark.anyio
@@ -383,7 +407,7 @@ async def test_failed_mutation_does_not_request_restart(
 
     assert result.is_error
     assert result.structured_content["restart_required"] is False
-    assert executor.plugin_state_calls == 0
+    assert executor.plugin_fingerprint_calls == 0
 
 
 @pytest.mark.anyio
@@ -561,7 +585,7 @@ async def test_failed_plugin_inspection_after_mutation_keeps_restart_required(
     async def fail():
         raise OSError("plugin metadata unavailable")
 
-    monkeypatch.setattr(executor, "discover_plugin_state", fail)
+    monkeypatch.setattr(executor, "probe_plugin_fingerprint", fail)
     server = server_factory(
         executor,
         (Command(name="install"), Command(name="info")),

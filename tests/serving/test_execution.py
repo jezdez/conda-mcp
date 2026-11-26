@@ -12,6 +12,8 @@ import anyio
 import pytest
 from conda.common.compat import on_win
 
+from conda_mcp.serving.capabilities import plugin_fingerprint
+from conda_mcp.serving.discovery import discover_plugins
 from conda_mcp.serving.execution import CompletionQueryError, CondaExecutor
 
 
@@ -137,6 +139,33 @@ def _install_windows_fakes(
 
 if TYPE_CHECKING:
     pass
+
+
+@pytest.mark.anyio
+async def test_plugin_fingerprint_probe_runs_in_child(
+    fake_conda, monkeypatch, tmp_path
+) -> None:
+    executor, _ = fake_conda
+    expected = plugin_fingerprint(*discover_plugins())
+    shadow = tmp_path / "conda_mcp" / "serving"
+    shadow.mkdir(parents=True)
+    (shadow.parent / "__init__.py").touch()
+    (shadow / "__init__.py").touch()
+    marker = tmp_path / "shadow-imported"
+    (shadow / "_plugin_probe.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).touch()\n"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    def fail_parent_discovery():
+        raise AssertionError("loaded a plugin in the server process")
+
+    monkeypatch.setattr(
+        "conda_mcp.serving.discovery.discover_plugins", fail_parent_discovery
+    )
+
+    assert await executor.probe_plugin_fingerprint() == expected
+    assert not marker.exists()
 
 
 @pytest.mark.anyio

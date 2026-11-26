@@ -40,7 +40,7 @@ testpaths = ["tests"]
 addopts = "-ra --cov --cov-report=term-missing --cov-report=xml:coverage.xml"
 
 [tool.coverage.run]
-source = ["conda_mcp"]
+source_pkgs = ["conda_mcp"]
 relative_files = true
 branch = true
 # CI enables execv on POSIX. Repeating subprocess is a safe Windows fallback.

@@ -9,6 +9,7 @@ from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+from jsonschema import ValidationError
 
 from conda_mcp.serving.command import command_tools
 from conda_mcp.serving.discovery import (
@@ -240,6 +241,43 @@ def test_discovery_limits_raw_only_to_affected_visible_commands() -> None:
         for diagnostic in catalog.diagnostics
     )
     assert "secret-choice-source" not in json.dumps(catalog.as_dict())
+
+
+def test_hidden_required_group_keeps_other_tools_available() -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    commands = parser.add_subparsers(dest="command")
+    hidden = commands.add_parser("hidden")
+    group = hidden.add_mutually_exclusive_group(required=True)
+    group.add_argument("--internal", action="store_true", help=argparse.SUPPRESS)
+    visible = commands.add_parser("visible")
+    visible.add_argument("--known", action="store_true")
+
+    catalog = inspect_parser(parser)
+    tools = command_tools(catalog)
+
+    assert catalog.root is not None
+    assert catalog.root.children[0].raw_only
+    assert any(
+        item.path == ("hidden",) and "hidden required" in item.reason
+        for item in catalog.diagnostics
+    )
+    assert [tool.path for tool in tools] == [("visible",)]
+    assert tools[0].as_mcp_tool().name == "conda_visible"
+
+
+def test_required_group_with_one_visible_action_stays_structured() -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("mixed")
+    group = child.add_mutually_exclusive_group(required=True)
+    group.add_argument("--internal", action="store_true", help=argparse.SUPPRESS)
+    group.add_argument("--visible", action="store_true")
+
+    tool = command_tools(inspect_parser(parser))[0]
+
+    assert tool.compile({"visible": True}) == ("mixed", "--visible")
+    assert parser.parse_args(tool.compile({"visible": True})).visible
+    with pytest.raises(ValidationError):
+        tool.compile({})
 
 
 def test_discovery_marks_greedy_plugin_commands_as_passthrough() -> None:

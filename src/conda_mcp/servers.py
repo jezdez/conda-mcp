@@ -272,3 +272,25 @@ def discover(prefix: Path, *, name: str | None = None) -> list[Server]:
                     prefix, record, prefix / relative
                 )
     return [servers[name] for name in sorted(servers)]
+
+
+def discover_inventory(prefix: Path) -> dict[str, Server | None]:
+    """Scan a prefix once, keeping invalid declarations separate by name."""
+    prefix = prefix.resolve()
+    data = PrefixData(prefix, interoperability=False)
+    data.assert_environment()
+    servers: dict[str, Server | None] = {}
+    for record in data.reload().iter_records():
+        for relative in record.files:
+            if match := _PATH.fullmatch(relative):
+                name = match.group(1)
+                if name in servers:
+                    servers[name] = None
+                    continue
+                try:
+                    servers[name] = Server.from_manifest(
+                        prefix, record, prefix / relative
+                    )
+                except CondaError:
+                    servers[name] = None
+    return servers

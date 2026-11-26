@@ -11,6 +11,7 @@ import pytest
 import tomlkit
 from conda import CondaError
 from conda.common.compat import on_win
+from conda.core.prefix_data import PrefixData
 
 from conda_mcp import registrations
 from conda_mcp.clients.manager import config_target
@@ -211,6 +212,78 @@ def test_toml_table_cannot_masquerade_as_managed_date(tmp_path, source) -> None:
     assert registration(target)[0]["state"] == "edited"
     with pytest.raises(CondaError, match="edited"):
         registration(target, "demo")
+
+
+def test_registry_reuses_prefix_scan_and_isolates_invalid_manifest(
+    tmp_path, source, install_package, monkeypatch
+) -> None:
+    prefix = Path(source["prefix"])
+    install_package(
+        "other-provider",
+        manifest={
+            "schema_version": 1,
+            "name": "other",
+            "description": "Other",
+            "http": {"url": "https://example.org/other"},
+        },
+    )
+    other = discover(prefix, name="other")[0].to_dict()
+    other_source = {key: other[key] for key in source}
+    target = config_target("codex", tmp_path, global_scope=False)
+    for name, registration_source in (("demo", source), ("other", other_source)):
+        registration(
+            target,
+            name,
+            entry={"url": f"https://example.org/{name}"},
+            source=registration_source,
+        )
+    other_target = config_target("cursor", tmp_path, global_scope=False)
+    registration(
+        other_target,
+        "demo",
+        entry={"url": "https://example.org/demo"},
+        source=source,
+    )
+
+    reloads = []
+    native_reload = PrefixData.reload
+
+    def counted_reload(self):
+        reloads.append(self)
+        return native_reload(self)
+
+    monkeypatch.setattr(PrefixData, "reload", counted_reload)
+    cache = {}
+    states = {
+        row["name"]: row["source_state"]
+        for row in registration(target, _source_cache=cache)
+    }
+    other_states = registration(other_target, _source_cache=cache)
+    assert states == {"demo": "current", "other": "current"}
+    assert other_states[0]["source_state"] == "current"
+    assert len(reloads) == 1
+
+    (prefix / "share/conda-mcp/servers/other.json").write_text("{}")
+    before = len(reloads)
+    states = {
+        row["name"]: row["source_state"]
+        for row in registration(target, _source_cache={})
+    }
+    assert states == {"demo": "current", "other": "invalid"}
+    assert len(reloads) - before == 1
+
+    def broken_reload(self):
+        reloads.append(self)
+        raise CondaError("broken package metadata")
+
+    monkeypatch.setattr(PrefixData, "reload", broken_reload)
+    before = len(reloads)
+    states = {
+        row["name"]: row["source_state"]
+        for row in registration(target, _source_cache={})
+    }
+    assert states == {"demo": "invalid", "other": "invalid"}
+    assert len(reloads) - before == 1
 
 
 def test_lock_receives_a_binary_file_object(tmp_path, source, entry, monkeypatch):

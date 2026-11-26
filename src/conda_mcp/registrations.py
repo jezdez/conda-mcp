@@ -14,7 +14,7 @@ from conda.gateways.disk.lock import lock
 
 from .clients.config import MAX_CONFIG_BYTES, ClientConfig, ConfigTarget
 from .files import atomic_write, load_json, open_lock, read_bytes
-from .servers import discover
+from .servers import Server, discover, discover_inventory
 
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -106,13 +106,20 @@ class ReceiptRecord:
         """Serialize the stable receipt schema, never a live server object."""
         return asdict(self)
 
-    def source_state(self, name: str) -> str:
-        """Inspect only this recorded source, never an environment registry."""
+    def source_state(
+        self, name: str, *, inventory: dict[str, Server | None] | None = None
+    ) -> str:
+        """Compare the recorded source with the installed server of this name."""
         prefix = Path(self.prefix)
         if not (prefix / "conda-meta").is_dir():
             return "missing"
         try:
-            server = next(iter(discover(prefix, name=name)), None)
+            if inventory is None:
+                server = next(iter(discover(prefix, name=name)), None)
+            else:
+                if name in inventory and inventory[name] is None:
+                    return "invalid"
+                server = inventory.get(name)
         except (CondaError, OSError, ValueError):
             return "invalid"
         if server is None:
@@ -324,15 +331,26 @@ def registration(
     source: dict | None = None,
     force: bool = False,
     dry_run: bool = False,
+    _source_cache: dict[str, dict[str, Server | None] | None] | None = None,
 ) -> list[dict] | dict:
     """Inspect or mutate an entry without looking up its source when unlinking."""
     try:
-        preview = _registration(target, name, entry, source, force, write=False)
+        preview = _registration(
+            target, name, entry, source, force, write=False, source_cache=_source_cache
+        )
         if isinstance(preview, list) or dry_run or not preview["changed"]:
             return preview
         lock_path = target.path.with_name(target.path.name + ".conda-mcp.lock")
         with open_lock(lock_path) as stream, lock(stream):
-            return _registration(target, name, entry, source, force, write=True)
+            return _registration(
+                target,
+                name,
+                entry,
+                source,
+                force,
+                write=True,
+                source_cache=_source_cache,
+            )
     except (ValueError, RecursionError) as error:
         raise CondaError(str(error)) from error
 
@@ -345,6 +363,7 @@ def _registration(
     force: bool,
     *,
     write: bool,
+    source_cache: dict[str, dict[str, Server | None] | None] | None,
 ) -> list[dict] | dict:
     """Plan against current files and write only while the caller holds the lock."""
     config = ClientConfig.from_bytes(
@@ -355,6 +374,7 @@ def _registration(
     entries = dict(receipt.entries)
     pending = receipt.pending
     if name is None:
+        inventories = source_cache if source_cache is not None else {}
         result = []
         for key in sorted(
             table.keys() | entries.keys() | ({pending.name} if pending else set())
@@ -371,13 +391,29 @@ def _registration(
                 if record.digest == fingerprint(table[key])
                 else "edited"
             )
+            source_state = "unknown"
+            if record:
+                if record.prefix not in inventories:
+                    prefix = Path(record.prefix)
+                    if not (prefix / "conda-meta").is_dir():
+                        inventories[record.prefix] = {}
+                    else:
+                        try:
+                            inventories[record.prefix] = discover_inventory(prefix)
+                        except (CondaError, OSError, ValueError):
+                            inventories[record.prefix] = None
+                inventory = inventories[record.prefix]
+                # A failed prefix scan invalidates each name without another scan.
+                source_state = record.source_state(
+                    key, inventory=inventory if inventory is not None else {key: None}
+                )
             result.append(
                 {
                     "name": key,
                     "client": target.client,
                     "path": str(target.path),
                     "state": state,
-                    "source_state": record.source_state(key) if record else "unknown",
+                    "source_state": source_state,
                     "shared_clients": target.shared_clients,
                 }
             )

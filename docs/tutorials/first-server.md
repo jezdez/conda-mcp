@@ -1,39 +1,84 @@
-# First server
+(tutorial-packaged-server)=
+# Connect a packaged server
 
-Install `conda-mcp` in the environment that provides your `conda` command. This is unreleased software, so use a local build or a development package source rather than a published package name.
+In this tutorial, you will build the greeting example, discover its installed declaration, register it for a project, and call its `greet` tool through conda-mcp. The reply will be `Hello, Conda!`.
 
-With the example recipe checked out and `rattler-build` available, build the local package and create a server environment:
+::::{steps}
+
+:::{step} Prepare the example
+
+Complete the `base` installation in {doc}`../how-to/install` and return to the conda-mcp checkout. That guide also prepares the build environment. This tutorial uses Bash or Zsh on POSIX, or PowerShell 7 on Windows.
+
+Build the maintained example and create its environment:
 
 ```sh
-rattler-build build -r examples/fastmcp/recipe.yaml -c conda-forge
-conda create -n servers -c ./output -c conda-forge example-fastmcp-server
+conda workspace run -e build -- rattler-build build -r examples/fastmcp/recipe.yaml --output-dir output/examples-rattler -c conda-forge
+conda create -n mcp-servers --override-channels -c ./output/examples-rattler -c conda-forge example-fastmcp-server "fastmcp>=3"
+conda activate mcp-servers
+mkdir packaged-session
+cd packaged-session
 ```
 
-These commands install a locally built example, not a published server package. From a project directory, use the new environment as the source:
+The example package comes from your local build. FastMCP supplies both its server implementation and the client commands used later. Your shell's conda command loads the manager from `base` and selects the active `mcp-servers` environment.
+:::
+
+:::{step} Discover and inspect
 
 ```sh
-conda mcp list -n servers
-conda mcp inspect fastmcp-example -n servers
-conda mcp render fastmcp-example -n servers --client codex
-conda mcp register fastmcp-example -n servers --client codex --dry-run
-conda mcp register fastmcp-example -n servers --client codex
+conda mcp list
+conda mcp inspect fastmcp-example
 ```
 
-`-n` and `-p` select the source environment that owns the installed declaration. They do not select where client configuration is written. Client configuration is written in the current project by default. Use `--global` only when the client supports a user-level configuration.
+The list should contain `fastmcp-example`. Inspection identifies `example-fastmcp-server` as its package owner and shows the `example-fastmcp` executable. Review the description, arguments, and package provenance before executing it.
 
-Review the package and declaration before registering it. Package ownership records where a declaration came from. It does not make its server trustworthy. A local server runs with your privileges after activation. Client approval and tool permissions remain client policy.
+These commands read package records and declarations without starting the server. The active environment supplies the {term}`source prefix`.
+:::
 
-Run a local stdio server in the foreground:
+:::{step} Preview and register
 
-```sh
-conda mcp run -n servers fastmcp-example
-```
-
-The command forwards protocol bytes between the client and server. An MCP client normally starts it using the generated command. Running it in a terminal waits for protocol input. EOF is delivered to the server, which decides when to exit. The bridge does not force an exit solely because stdin closed.
-
-Inspect and remove the registration independently of the package:
+Preview the Codex registration, then create it:
 
 ```sh
+conda mcp register fastmcp-example --client codex --dry-run
+conda mcp register fastmcp-example --client codex
 conda mcp registry --client codex
-conda mcp unregister fastmcp-example --client codex
 ```
+
+The dry run creates no configuration, lock, or receipt. The actual registration creates `.codex/config.toml` and its adjacent receipt in `packaged-session`. The registry should report `managed` with a `current` source. Codex does not need to be installed for this configuration exercise, and registration does not start it or grant approval.
+:::
+
+:::{step} Call the greeting tool
+
+```{important}
+This step executes activation hooks and server code with your privileges. Review the installed package before making the call.
+```
+
+For a live connection, render the JSON form accepted by the [FastMCP client CLI](https://gofastmcp.com/docs/cli/client):
+
+```sh
+conda mcp render fastmcp-example --client claude-code > server.json
+fastmcp list server.json --timeout 30
+fastmcp call server.json greet name=Conda --timeout 30
+```
+
+The list should show `greet` with a required `name` string. The call returns `Hello, Conda!`. Each client command launches a fresh session through `conda mcp run`, activates `mcp-servers`, and closes the session when it finishes. The JSON file does not register Claude Code.
+
+Running `conda mcp run` by itself in a terminal waits for protocol input. Use a client for a tool call. The manager preserves protocol streams and does not add its own JSON response around the server's messages.
+:::
+
+:::{step} Remove the registration and example
+
+```sh
+conda mcp unregister fastmcp-example --client codex --dry-run
+conda mcp unregister fastmcp-example --client codex
+conda mcp registry --client codex
+conda deactivate
+conda env remove -n mcp-servers
+```
+
+The registry should now contain no registration for `fastmcp-example`. Unregistration preserves the server package until the explicit environment removal. Delete `server.json`, then remove the disposable `packaged-session` directory and any empty configuration or receipt files left inside it.
+
+To package your own tool, follow {doc}`../how-to/package-a-server`. To connect a hosted endpoint, use {doc}`../how-to/connect-a-remote-server`. The recordings in {doc}`../demos` show the same discovery and registration operations.
+:::
+
+::::

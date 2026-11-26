@@ -1,24 +1,106 @@
-# Package a server
+# Package a Python server
 
-Put a version-1 declaration at `share/conda-mcp/servers/NAME.json` in the installed package. The manifest filename and `name` must agree. Discovery reads only declarations listed in the installed package record.
+Use this guide to ship a Python MCP server and its declaration in one conda package. It follows the maintained FastMCP greeting example from source code to an installed protocol call. You need the conda-mcp checkout and the build environment prepared by {doc}`install`.
 
-The repository has working recipes under `examples/`:
+For other layouts, use {doc}`package-a-node-server`, {doc}`package-a-wrapper`, or {doc}`package-a-remote-server`.
 
-| Recipe | Purpose |
-| --- | --- |
-| `fastmcp` | A Python FastMCP server with a console entry point. |
-| `node` | A Node stdio server with a conda-managed Python console entry point and Node runtime. |
-| `remote` | A noarch-generic HTTP declaration with no network activity during installation or discovery. |
-| `wrapper` | A noarch-generic declaration that names the `node` executable from a runtime dependency. |
+## Define the server entry point
 
-Declare every local executable's runtime dependency in the recipe. Do not rely on `npx`, `uvx`, or another downloader at launch time. A metadata-only wrapper must declare the package that owns the executable.
+The example has one tool and a `main()` function that starts stdio transport:
 
-Build a recipe with the recipe-v1 builder:
-
-```sh
-rattler-build build -r examples/node/recipe.yaml -c conda-forge
+```{literalinclude} ../../examples/fastmcp/example_fastmcp.py
+:language: python
+:caption: examples/fastmcp/example_fastmcp.py
 ```
 
-Install the resulting artifact in a disposable environment and use `conda mcp inspect -p PREFIX NAME` to review the recorded declaration before configuring a client. The entry point starts the packaged JavaScript without invoking `npx` or downloading code.
+Keep protocol output on stdout and diagnostics on stderr. The Python build metadata includes the module and its runtime dependency:
 
-`conda-build examples/node -c conda-forge` accepts the same v1 recipe through conda-build's Rattler integration. Pass the recipe directory to this entry point. The two commands exercise different integration paths around the same build engine.
+```{literalinclude} ../../examples/fastmcp/pyproject.toml
+:language: toml
+:caption: examples/fastmcp/pyproject.toml
+```
+
+In this example, the conda recipe creates the `example-fastmcp` console entry point. The wheel metadata alone does not create that entry point or install the declaration. Adapt the entry-point ownership to your package's build system without defining competing launchers.
+
+## Include the declaration as a package file
+
+The declaration names an executable basename and literal arguments. Its server name must match its installed filename:
+
+```{literalinclude} ../../examples/fastmcp/fastmcp-example.json
+:language: json
+:caption: examples/fastmcp/fastmcp-example.json
+```
+
+The build copies it into the package prefix:
+
+```{literalinclude} ../../examples/fastmcp/install.py
+:language: python
+:caption: examples/fastmcp/install.py
+```
+
+Install declarations under `share/conda-mcp/servers/NAME.json` during the package build. Conda records the file in the installed package's inventory. Copying a JSON file into an existing environment by hand does not make it discoverable.
+
+Use environment-variable names for credentials and declare whether each is required. The full field definitions and validation rules are in {doc}`../reference/server-format`.
+
+## Declare build and runtime requirements
+
+The recipe installs the Python code, creates its launcher, copies the declaration, and checks package contents:
+
+```{literalinclude} ../../examples/fastmcp/recipe.yaml
+:language: yaml
+:caption: examples/fastmcp/recipe.yaml
+```
+
+Runtime requirements must provide the executable and every dependency it needs. Launch must not depend on `npx`, `uvx`, or another downloader. The executable may belong to a declared dependency, but it must have unambiguous package ownership inside the source prefix.
+
+## Build and inspect the artifact
+
+From the checkout, select a builder:
+
+::::{tab-set}
+:sync-group: builder
+
+:::{tab-item} rattler-build
+:sync: rattler-build
+
+```sh
+conda workspace run -e build -- rattler-build build -r examples/fastmcp/recipe.yaml --output-dir output/examples-rattler -c conda-forge
+conda create -n mcp-servers --override-channels -c ./output/examples-rattler -c conda-forge example-fastmcp-server "fastmcp>=3"
+conda mcp inspect fastmcp-example -n mcp-servers --json
+```
+:::
+
+:::{tab-item} conda-build
+:sync: conda-build
+
+The conda-build integration accepts the recipe directory:
+
+```sh
+conda workspace run -e build -- conda-build examples/fastmcp --output-folder output/examples-conda -c conda-forge
+conda create -n mcp-servers --override-channels -c ./output/examples-conda -c conda-forge example-fastmcp-server "fastmcp>=3"
+conda mcp inspect fastmcp-example -n mcp-servers --json
+```
+:::
+
+::::
+
+Check the manifest path, package owner, executable, and declared arguments. Inspection validates discovery and launch requirements, but does not start a protocol session.
+
+Both commands accept the recipe-v1 source. They exercise different integration paths around the Rattler build engine. Keep their output directories separate when checking the artifacts from each builder.
+
+## Exercise the installed protocol
+
+From a disposable project directory, render and call the installed package:
+
+```sh
+conda activate mcp-servers
+conda mcp render fastmcp-example --client claude-code > server.json
+fastmcp list server.json --timeout 30
+fastmcp call server.json greet name=Conda --timeout 30
+```
+
+The expected reply is `Hello, Conda!`. This checks that the installed executable starts after activation and answers an MCP request. Keep checks for your own tool's inputs and results alongside the package source.
+
+For this repository, `conda task run -e build test-examples` builds all maintained examples with both builders, installs them into temporary prefixes, and exercises their intended behaviour. The remote and wrapper examples are metadata fixtures, so their checks do not claim a live hosted connection or a wrapper-provided MCP implementation.
+
+Deactivate and remove the disposable server environment when finished, and delete `server.json`. If you also registered the server, unregister it before removing the environment. See {doc}`recover-registrations` for registrations left behind by package removal.

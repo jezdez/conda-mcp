@@ -2,8 +2,9 @@
 
 ## conda-cli-mcp
 
-The modules in `src/conda_mcp/serving/` and their tests in `tests/serving/`
-are derived from conda-cli-mcp 0.2.0
+The modules in `src/conda_mcp/serving/`, their tests in `tests/serving/`,
+and the built-in server's tutorials, guides, reference, and explanation in
+`docs/` are derived from conda-cli-mcp 0.2.0
 (https://github.com/jezdez/conda-cli-mcp), used under the BSD 3-Clause
 License below. Later changes in this repository modify that code, including
 in-process discovery, the `conda mcp serve` entry point, and removal of the

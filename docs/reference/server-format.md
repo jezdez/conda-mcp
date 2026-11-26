@@ -11,7 +11,7 @@ Declarations are JSON files installed at `share/conda-mcp/servers/NAME.json`. Th
 }
 ```
 
-Required fields are `schema_version`, `name`, and `description`. Version 1 accepts exactly one transport: `stdio` or `http`. The name uses lowercase ASCII letters, numbers, underscores, and hyphens, starts with a letter or number, and has at most 64 characters. See `src/conda_mcp/schema/server-v1.json` for the shipped schema.
+Required fields are `schema_version`, `name`, and `description`. Version 1 accepts exactly one transport: `stdio` or `http`. The name uses lowercase ASCII letters, numbers, underscores, and hyphens, starts with a letter or number, and has at most 64 characters. The shipped schema is available as {download}`server-v1.json <../../src/conda_mcp/schema/server-v1.json>`.
 
 An HTTP declaration stores its endpoint metadata. Discovery and configuration do not make a network request. Credential fields name environment variables and never contain credential values. Provenance comes from the conda package record that lists the declaration, while trust is a separate user decision.
 
@@ -49,10 +49,12 @@ Executable lookup follows conda's native executable-directory order inside the s
 }
 ```
 
-The endpoint must use HTTPS without user information, query, or fragment. Header mappings contain environment-variable names, never values. Transport-controlled headers, cookies, duplicate case-insensitive header names, and competing authorization fields are rejected. The client owns authentication, network access, consent, and transport behavior.
+The endpoint must use HTTPS without user information, query, or fragment. Header mappings contain environment-variable names, never values. Transport-controlled headers, cookies, duplicate case-insensitive header names, and competing authorisation fields are rejected. The client owns authentication, network access, consent, and transport behaviour.
 
 ## Validation and provenance
 
 Unknown fields, duplicate JSON keys, nonfinite numbers, invalid UTF-8, oversized manifests, and escaping paths are rejected. The description is nonblank and at most 1,024 characters. Windows device names are rejected on every platform. The optional `registry_name` is descriptive metadata. It does not assert that the official MCP Registry accepts conda packages.
 
-Discovery only considers matching paths in installed `PrefixRecord.files`. A package can provide multiple declarations, but each name must have one provider. Output includes the selected prefix, relative manifest path, manifest SHA-256 digest, and record-derived package name, version, build, and channel. A later launch reloads those records. Same-owner updates apply on subsequent launches, while a provider replacement fails the generated exact-owner command.
+Discovery only considers matching paths in installed `PrefixRecord.files`. A package can provide multiple declarations, but each name must have one {term}`provider`. Output includes the selected prefix, relative manifest path, manifest SHA-256 digest, and record-derived package name, version, build, and channel. A later launch reloads those records. Same-owner updates apply on subsequent launches, while a provider replacement fails the generated exact-owner command.
+
+The runtime uses the shipped JSON Schema for structural validation, followed by checks for ownership, safe paths, valid URL ports and case-insensitive duplicates. Commands selecting one server validate that declaration independently of unrelated declarations. `list` validates the complete inventory and fails if any declaration is invalid or has duplicate owners.

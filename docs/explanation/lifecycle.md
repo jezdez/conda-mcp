@@ -1,5 +1,7 @@
 # Lifecycle and safety
 
+This page describes the manager's package and registration lifecycle and the process cleanup used by `run` and `serve`. For command discovery and the built-in server's permission model, see {doc}`serving`.
+
 Conda-mcp reads package records from one selected environment. It does not install packages, solve dependencies, create environments, contact remote servers, or launch servers during discovery, inspection, rendering, registration, or registry listing.
 
 `register` records a client configuration entry and receipt. Existing conflicts are reported instead of overwritten. `unregister` removes only a registration it can identify safely, preserving the package and unrelated client configuration. If a write was interrupted, inspect `registry` and resolve the reported conflict before retrying.
@@ -22,4 +24,4 @@ These controls keep activation output out of the protocol and bound normal proce
 
 [Docker MCP Toolkit](https://docs.docker.com/ai/mcp-catalog-and-toolkit/cli/) separates packaged servers from client configuration through profiles and a gateway. Conda-mcp registers each server directly with the client and starts local servers in their conda environments. It does not add a gateway or profile store.
 
-Conda owns package installation and environment exports. Clients own MCP sessions, authentication, and approval. Here, `registry` means local client registrations, not a public server catalog. `render` prints a native snippet with machine-specific paths, so it is not a portable backup and has no corresponding import command.
+Conda owns package installation and environment exports. Clients own MCP sessions, authentication, and approval. Here, `registry` means local client registrations, not a public server catalogue. `render` prints a native snippet with machine-specific paths, so it is not a portable backup and has no corresponding import command.

@@ -463,6 +463,38 @@ async def test_plugin_inspection_tools_run_without_write_permission(
     assert executor.calls == [("plugins", "info"), ("plugins", "list")]
 
 
+@pytest.mark.anyio
+async def test_generated_commands_do_not_shadow_builtin_tools() -> None:
+    completion = Plugin("conda-completion", "0.3", "completion", "completion.plugin")
+    executor = RecordingExecutor(plugins=(completion,))
+    program = Program(
+        prog="conda",
+        conda_version="26.7",
+        root=Command(
+            name=None,
+            terminal=False,
+            children=(Command(name="execute"), Command(name="cli_command")),
+        ),
+    )
+    server = CondaMCPServer(  # type: ignore[arg-type]
+        executor,
+        Capabilities("conda", program, (completion,)),
+        SafetyPolicy(allow_write=True, allow_exec=True),
+    )
+    generated = list(server.generated_tools)
+
+    async with Client(server.server) as client:
+        names = [tool.name for tool in (await client.list_tools()).tools]
+        await client.call_tool(generated[0], {})
+        await client.call_tool(generated[1], {})
+        await client.call_tool(EXECUTE_TOOL_NAME, {"argv": ["info"]})
+        await client.call_tool(COMPLETION_TOOL_NAME, {})
+
+    assert names == [EXECUTE_TOOL_NAME, COMPLETION_TOOL_NAME, *generated]
+    assert executor.calls == [("execute",), ("cli_command",), ("info",)]
+    assert executor.completion_calls == [()]
+
+
 @pytest.mark.parametrize(
     ("allow_write", "allow_exec", "spawned"),
     [

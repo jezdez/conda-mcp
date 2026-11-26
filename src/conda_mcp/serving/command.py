@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 PASSTHROUGH_ARGUMENT = "args"
 TOOL_PREFIX = "conda"
+EXECUTE_TOOL_NAME = "conda_execute"
+COMPLETION_TOOL_NAME = "conda_cli_command"
 MAX_REPEAT_COUNT = 128
 
 
@@ -464,12 +466,20 @@ def command_tools(program: Program) -> tuple[CommandTool, ...]:
 
     visit(program.root, ())
 
-    name_counts: dict[str, int] = {}
-    for tool in tools:
-        name_counts[tool.name] = name_counts.get(tool.name, 0) + 1
-    tools = [
-        replace(tool, disambiguate_name=True) if name_counts[tool.name] > 1 else tool
-        for tool in tools
-    ]
-
-    return tuple(tools)
+    reserved = {EXECUTE_TOOL_NAME, COMPLETION_TOOL_NAME}
+    while True:
+        name_counts: dict[str, int] = {}
+        for tool in tools:
+            name_counts[tool.name] = name_counts.get(tool.name, 0) + 1
+        collisions = {name for name, count in name_counts.items() if count > 1}
+        if not collisions and not reserved.intersection(name_counts):
+            return tuple(tools)
+        updated = [
+            replace(tool, disambiguate_name=True)
+            if tool.name in collisions | reserved and not tool.disambiguate_name
+            else tool
+            for tool in tools
+        ]
+        if updated == tools:
+            raise ValueError("Generated tool names remain ambiguous")
+        tools = updated

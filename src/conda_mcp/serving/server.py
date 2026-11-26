@@ -25,7 +25,7 @@ from mcp.types import (
 )
 
 from . import __version__
-from .command import command_tools
+from .command import COMPLETION_TOOL_NAME, EXECUTE_TOOL_NAME, command_tools
 from .execution import CompletionQueryError
 from .policy import PolicyViolation, SafetyPolicy
 
@@ -45,8 +45,6 @@ if TYPE_CHECKING:
     from .policy import OperationPolicy
 
 CAPABILITIES_URI: Final = "conda://capabilities"
-EXECUTE_TOOL_NAME: Final = "conda_execute"
-COMPLETION_TOOL_NAME: Final = "conda_cli_command"
 COMPLETION_INPUT_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
     "properties": {
@@ -209,7 +207,7 @@ class CondaMCPServer:
                     open_world_hint=False,
                 ),
             )
-            if completion_available and COMPLETION_TOOL_NAME not in self.generated_tools
+            if completion_available
             else None
         )
         self.completion_input_validator = Draft202012Validator(COMPLETION_INPUT_SCHEMA)

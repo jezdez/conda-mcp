@@ -761,6 +761,46 @@ def test_terminal_nonleaf_commands_and_their_children_receive_tools() -> None:
     assert generated[1].compile({}) == ("config", "sources")
 
 
+def test_generated_commands_cannot_take_builtin_tool_names() -> None:
+    program = Program(
+        prog="conda",
+        conda_version="26.10.0",
+        root=Command(
+            name=None,
+            terminal=False,
+            children=(Command(name="execute"), Command(name="cli_command")),
+        ),
+    )
+
+    generated = command_tools(program)
+
+    assert generated[0].name.startswith("conda_execute_")
+    assert generated[1].name.startswith("conda_cli_command_")
+    assert generated[0].compile({}) == ("execute",)
+    assert generated[1].compile({}) == ("cli_command",)
+
+
+def test_hashed_reserved_name_cannot_hide_another_command() -> None:
+    reserved_hash = canonical_tool_name(("execute",), disambiguate=True)
+    sibling = reserved_hash.removeprefix("conda_")
+    program = Program(
+        prog="conda",
+        conda_version="26.10.0",
+        root=Command(
+            name=None,
+            terminal=False,
+            children=(Command(name="execute"), Command(name=sibling)),
+        ),
+    )
+
+    generated = command_tools(program)
+    names = [tool.name for tool in generated]
+
+    assert names[0] == reserved_hash
+    assert len(names) == len(set(names))
+    assert generated[1].compile({}) == (sibling,)
+
+
 def test_command_tool_is_frozen_and_names_are_canonical() -> None:
     tool = make_tool()
 

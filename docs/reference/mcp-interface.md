@@ -7,7 +7,7 @@ This page describes the built-in conda server. Servers launched through `conda m
 (generated-tools)=
 ## Generated command tools
 
-Each representable terminal command in conda's startup parser receives a tool. Names begin with `conda_` and join the canonical command path with underscores, for example `conda_info` and `conda_env_create`. Aliases are metadata on the canonical tool. Names containing unsupported characters, exceeding the MCP length limit, or colliding with another command receive a deterministic hash suffix.
+Each representable terminal command in conda's startup parser receives a tool. Names begin with `conda_` and join the canonical command path with underscores, for example `conda_info` and `conda_env_create`. Aliases are metadata on the canonical tool. Names containing unsupported characters, exceeding the MCP length limit, colliding with another command, or matching the built-in `conda_execute` or `conda_cli_command` tools receive a deterministic hash suffix.
 
 Input schemas describe supported argparse actions: scalar values, booleans, counts, repeated options, arrays, choices, positionals, mutually exclusive groups, and nested commands. Options inherited from parent commands keep their command scope. Repeated property names receive numeric suffixes. The schema returned by `tools/list` is authoritative for the installed parser.
 

@@ -234,6 +234,41 @@ def test_protocol_streams_before_exit_and_receives_eof(executable_server):
             process.communicate(timeout=5)
 
 
+def test_direct_run_keeps_plugin_output_off_protocol(
+    executable_server: Path, noisy_conda_venv: Path
+) -> None:
+    process = subprocess.Popen(
+        [
+            str(noisy_conda_venv),
+            "-I",
+            "-m",
+            "conda_mcp._stdio",
+            "run",
+            "-p",
+            str(executable_server),
+            "--package",
+            "provider",
+            "example",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env={**os.environ, "MCP_TEST_TOKEN": ""},
+    )
+    try:
+        assert process.stdout is not None
+        assert process.stdout.readline() == b"READY\n"
+        stdout, stderr = process.communicate(b"PROTOCOL\n", timeout=30)
+        assert process.returncode == 0, stderr
+        assert stdout == b"PROTOCOL\nEOF\n"
+        assert b"NOISY_CONDA_PLUGIN" not in stdout
+        assert b"NOISY_CONDA_PLUGIN" in stderr
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+
+
 @pytest.mark.skipif(on_win, reason="POSIX deactivation script")
 def test_exit_status_survives_deactivation_and_argv_is_literal(
     executable_server, tmp_path

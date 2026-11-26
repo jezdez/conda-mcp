@@ -3,9 +3,62 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sysconfig
+import venv
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture
+def noisy_conda_venv(tmp_path: Path) -> Path:
+    """Expose an installed conda plugin that prints during module import."""
+    root = tmp_path / "venv"
+    venv.EnvBuilder(system_site_packages=True, with_pip=False).create(root)
+    python = root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    site = Path(
+        subprocess.check_output(
+            [
+                str(python),
+                "-I",
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            text=True,
+        ).strip()
+    )
+    (site / "conda_mcp_noisy_plugin.py").write_text(
+        """\
+print("NOISY_CONDA_PLUGIN")
+from conda import plugins
+
+@plugins.hookimpl
+def conda_subcommands():
+    return ()
+""",
+        encoding="utf-8",
+    )
+    metadata = site / "conda_mcp_noisy_plugin-1.0.dist-info"
+    metadata.mkdir()
+    (metadata / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: conda-mcp-noisy-plugin\nVersion: 1.0\n",
+        encoding="utf-8",
+    )
+    (metadata / "entry_points.txt").write_text(
+        "[conda]\nmcp-noisy = conda_mcp_noisy_plugin\n",
+        encoding="utf-8",
+    )
+    conda = Path(sysconfig.get_path("scripts")) / (
+        "conda.exe" if os.name == "nt" else "conda"
+    )
+    target = python.parent / conda.name
+    if os.name == "nt":
+        target.write_bytes(conda.read_bytes())
+    else:
+        target.symlink_to(conda)
+    return python
 
 
 @pytest.fixture

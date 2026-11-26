@@ -179,7 +179,9 @@ class LaunchPayload:
                     os.close(descriptor)
 
 
-def run(server: Server, arguments: tuple[str, ...]) -> int:
+def run(
+    server: Server, arguments: tuple[str, ...], *, protocol_stdout: int | None = None
+) -> int:
     """Activate the validated server prefix and execute its stdio executable."""
     if server.stdio is None:
         raise CondaError("Only stdio servers can be launched.")
@@ -193,7 +195,7 @@ def run(server: Server, arguments: tuple[str, ...]) -> int:
     process: subprocess.Popen[bytes] | _launch_windows._Process | None = None
     try:
         stdin = os.dup(0)
-        stdout = os.dup(1)
+        stdout = os.dup(1 if protocol_stdout is None else protocol_stdout)
         info = executable.stat()
         payload = LaunchPayload(
             (str(executable), *server.stdio.args, *arguments),

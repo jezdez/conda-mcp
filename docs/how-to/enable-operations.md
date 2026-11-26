@@ -21,7 +21,7 @@ This permits operations classified as changes to environments, packages, configu
 For a manually configured direct `serve` entry using a Python executable, the arguments become:
 
 ```json
-["-I", "-m", "conda", "mcp", "serve", "--allow-write"]
+["-I", "-m", "conda_mcp._stdio", "serve", "--allow-write"]
 ```
 
 Restart the server through the client after updating its registration. Listing tools alone cannot confirm that write permission changed, because mutation tools are listed in both modes. Confirm the startup arguments in the client before attempting a mutation in a disposable environment.

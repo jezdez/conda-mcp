@@ -2,14 +2,44 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import anyio
 import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+
+def test_direct_serve_keeps_plugin_output_off_protocol(
+    noisy_conda_venv: Path,
+) -> None:
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "1"},
+        },
+    }
+    completed = subprocess.run(
+        [str(noisy_conda_venv), "-I", "-m", "conda_mcp._stdio", "serve"],
+        input=json.dumps(request).encode() + b"\n",
+        capture_output=True,
+        timeout=120,
+    )
+
+    assert completed.returncode == 0, completed.stderr.decode(errors="replace")
+    assert b"NOISY_CONDA_PLUGIN" in completed.stderr
+    assert b"NOISY_CONDA_PLUGIN" not in completed.stdout
+    responses = [json.loads(line) for line in completed.stdout.splitlines()]
+    assert responses[0]["id"] == 1
+    assert "result" in responses[0]
 
 
 @pytest.mark.anyio

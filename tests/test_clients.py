@@ -91,8 +91,7 @@ def test_stdio_uses_absolute_host_and_exact_manifest_owner(client, server, home)
     args = [
         "-I",
         "-m",
-        "conda",
-        "mcp",
+        "conda_mcp._stdio",
         "run",
         "-p",
         str(server.prefix),

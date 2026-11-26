@@ -61,11 +61,11 @@ Prints the conda-mcp version and exits.
 
 Read-only conda commands are callable by default. Mutations need `--allow-write`, and raw execution needs `--allow-exec`. Enabling execution does not grant write permission. Server policy is fixed at startup and enforced on each call, independent of the annotations a client displays. The server excludes itself from the generated tool list, so a client cannot start another long-lived server through a generated tool.
 
-`serve` resolves conda from the running interpreter's installation prefix. An inherited `CONDA_EXE` or a different conda on `PATH` does not change which installation it serves. To expose a different installation, launch that installation's own `conda mcp serve`.
+`serve` resolves conda from the running interpreter's installation prefix. An inherited `CONDA_EXE` or a different conda on `PATH` does not change which installation it serves. To expose a different installation, use that installation's Python launcher. Use `python -I -m conda_mcp._stdio serve` for an MCP client so plugin startup output cannot enter its protocol stream.
 
 On Windows, command execution through `serve` has the same operating-system and pywin32 requirements as `run`. Commands start suspended, are assigned to a Job Object, then resume. Output draining continues until EOF or the command timeout, including when a descendant holds a pipe open after the root exits. See [Lifecycle and safety](../explanation/lifecycle.md) for cleanup behaviour and the remaining owner-death limitation during suspended creation.
 
-The conda package installs a `conda-cli` declaration at `share/conda-mcp/servers/conda-cli.json`. `list` and `inspect` show it like any package-owned server. `register` writes the same entry shape it writes for every packaged server, and that entry runs the declared `conda mcp serve` from the prefix. A wheel install has no conda package record, so discovery does not advertise the declaration.
+The conda package installs a `conda-cli` declaration at `share/conda-mcp/servers/conda-cli.json`. `list` and `inspect` show it like any package-owned server. `register` writes the same entry shape it writes for every packaged server, and that entry runs the direct Python launcher from the prefix. A wheel install has no conda package record, so discovery does not advertise the declaration.
 
 (native-destinations)=
 ## Native destinations

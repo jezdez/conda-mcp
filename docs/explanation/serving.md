@@ -4,9 +4,9 @@ Conda-mcp's manager reads declarations installed by packages and connects those 
 
 ## Two execution paths
 
-For a packaged stdio server, the client starts `conda mcp run`. The runner activates the selected environment, checks the recorded declaration and executable, and forwards protocol streams to that server. The server defines its own MCP tools. Conda-mcp does not inspect or authorise those individual tool calls.
+For a packaged stdio server, the client starts conda-mcp's direct stdio launcher. The runner activates the selected environment, checks the recorded declaration and executable, and forwards protocol streams to that server. The server defines its own MCP tools. Conda-mcp does not inspect or authorise those individual tool calls.
 
-For the built-in conda server, the client starts `conda mcp serve`. This process handles MCP requests, validates tool input, checks its startup permissions, and executes conda commands in child processes. The conda package's `conda-cli` declaration connects the two paths: registering it makes the manager launch the built-in server as a packaged server.
+For the built-in conda server, the client starts the direct stdio launcher with `serve`. This process handles MCP requests, validates tool input, checks its startup permissions, and executes conda commands in child processes. The conda package's `conda-cli` declaration connects the two paths: registering it makes the manager launch the built-in server as a packaged server. The launcher reserves protocol stdout before loading conda plugins and sends startup output to stderr.
 
 The {term}`serving installation` determines the conda command catalogue and installed plugins. An environment selected by a command's `-n` or `-p` can be a target of that command, but does not become a different serving installation.
 

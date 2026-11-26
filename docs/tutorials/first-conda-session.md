@@ -38,7 +38,7 @@ conda mcp inspect conda-cli
 conda mcp render conda-cli --client claude-code > conda-server.json
 ```
 
-Inspection identifies conda-mcp as the declaration owner and shows `conda` with the arguments `mcp serve`. The rendered JSON is also accepted by FastMCP. Creating this file does not register Claude Code or start a server.
+Inspection identifies conda-mcp as the declaration owner and shows Python with the arguments `-I -m conda_mcp._stdio serve`. The rendered JSON is also accepted by FastMCP. Creating this file does not register Claude Code or start a server.
 
 The configuration records absolute paths to the server. Activate the client environment and list tools:
 

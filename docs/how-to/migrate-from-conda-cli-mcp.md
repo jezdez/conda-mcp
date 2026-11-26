@@ -6,11 +6,11 @@
 
 | Old invocation | New invocation |
 | --- | --- |
-| `ccm --allow-write` | `conda mcp serve --allow-write` |
-| `ccm --conda-exe /path/to/conda` | Launch that installation's own `conda mcp serve` |
-| `conda mcp --allow-write` (conda-cli-mcp 0.2.0) | `conda mcp serve --allow-write` |
+| `ccm --allow-write` | Register `conda-cli` with `-- --allow-write`, or use that installation's Python with `-I -m conda_mcp._stdio serve --allow-write` |
+| `ccm --conda-exe /path/to/conda` | Use the selected installation's Python launcher |
+| `conda mcp --allow-write` (conda-cli-mcp 0.2.0) | Register `conda-cli` with `-- --allow-write` |
 
-`conda mcp serve` always serves the installation that launched it, so there is no path override. To expose a second installation, run that installation's `conda mcp serve`.
+The direct `serve` launcher uses the installation that supplies its Python interpreter, so there is no path override. To expose a second installation, configure a separate client entry using its Python interpreter.
 
 ## What stays the same
 
@@ -31,7 +31,7 @@ The command catalogue now includes the manager's own commands, because they are 
 1. Save a private copy of the old client entry and stop its server through the client.
 2. Choose the conda installation to expose. If reusing the old environment, remove `conda-cli-mcp` with the installer that owns it before installing conda-mcp. Do not use pip to remove a conda-owned package. A fresh environment can be prepared without changing the old one.
 3. Build and install the development conda-mcp package following {doc}`install`. This project is unreleased, so do not assume a public package is available.
-4. Update the client entry to use the intended installation's absolute executable and `mcp serve`. Remove `--conda-exe` and preserve only the permission and limit options you still need. Use {doc}`configure-serving` for JSON and TOML examples.
+4. Update the client entry to use the intended installation's absolute Python executable with `-I -m conda_mcp._stdio serve`, or register its packaged `conda-cli` declaration. Remove `--conda-exe` and preserve only the permission and limit options you still need. Use {doc}`configure-serving` for JSON and TOML examples.
 5. Start the new entry and follow {doc}`../tutorials/first-conda-session` to verify the served installation and a read-only call. If mutations are needed, configure them with {doc}`enable-operations` and test against a disposable target environment.
 6. Remove the obsolete client entry and retire the old environment only after the replacement works. Keep any environment still used for other tasks.
 

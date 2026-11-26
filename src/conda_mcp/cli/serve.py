@@ -10,12 +10,12 @@ if TYPE_CHECKING:
     from argparse import Namespace
 
 
-def execute(args: Namespace) -> int:
+def execute(args: Namespace, *, protocol_stdout: int | None = None) -> int:
     """Run the MCP server in this process, owning stdio from here on."""
     from ..serving.cli import serve_from_args
 
     try:
-        serve_from_args(args)
+        serve_from_args(args, protocol_stdout=protocol_stdout)
     except FileNotFoundError:
         raise CondaValueError(
             "could not find conda in the launching Python environment"

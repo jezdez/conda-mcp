@@ -25,7 +25,8 @@ def test_run_preserves_a_literal_child_separator(monkeypatch):
     server = object()
     launches = []
 
-    def launch(selected, arguments):
+    def launch(selected, arguments, *, protocol_stdout):
+        assert protocol_stdout >= 0
         launches.append((selected, arguments))
         return 17
 

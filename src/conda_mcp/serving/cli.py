@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
@@ -18,6 +20,7 @@ from .server import CondaMCPServer
 async def serve(
     executor: CondaExecutor,
     policy: SafetyPolicy = SafetyPolicy(),
+    protocol_stdout: int | None = None,
 ) -> None:
     """Discover this installation's CLI and serve it over standard I/O."""
     program = await executor.discover()
@@ -37,10 +40,13 @@ async def serve(
         program=program,
         plugins=plugins,
     )
+    if protocol_stdout is not None:
+        sys.stdout.flush()
+        os.dup2(protocol_stdout, 1)
     await CondaMCPServer(executor, capabilities, policy).run_stdio()
 
 
-def serve_from_args(args: Namespace) -> None:
+def serve_from_args(args: Namespace, *, protocol_stdout: int | None = None) -> None:
     """Run the MCP server from parsed ``serve`` arguments."""
     executor = CondaExecutor.from_environment(
         timeout_seconds=args.timeout,
@@ -51,4 +57,12 @@ def serve_from_args(args: Namespace) -> None:
         allow_write=args.allow_write,
         allow_exec=args.allow_exec,
     )
-    anyio.run(serve, executor, policy, backend="asyncio")
+    own_stdout = protocol_stdout is None
+    if protocol_stdout is None:
+        protocol_stdout = os.dup(1)
+        os.dup2(2, 1)
+    try:
+        anyio.run(serve, executor, policy, protocol_stdout, backend="asyncio")
+    finally:
+        if own_stdout:
+            os.close(protocol_stdout)

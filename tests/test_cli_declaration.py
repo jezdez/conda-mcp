@@ -21,5 +21,5 @@ def test_shipped_declaration_is_discoverable(install_package) -> None:
     assert server.package == "conda-mcp"
     assert server.description
     assert server.stdio is not None
-    assert server.stdio.command == "conda"
-    assert server.stdio.args == ("mcp", "serve")
+    assert server.stdio.command == "python"
+    assert server.stdio.args == ("-I", "-m", "conda_mcp._stdio", "serve")

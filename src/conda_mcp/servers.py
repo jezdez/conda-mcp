@@ -31,9 +31,6 @@ _SCHEMA = cast(
 _MANIFEST = Draft202012Validator(_SCHEMA)
 _STDIO = _MANIFEST.evolve(schema=_SCHEMA["properties"]["stdio"])
 _HTTP = _MANIFEST.evolve(schema=_SCHEMA["properties"]["http"])
-_ENVIRONMENT = _MANIFEST.evolve(
-    schema=_SCHEMA["properties"]["stdio"]["properties"]["environment"]["items"]
-)
 
 
 @dataclass(frozen=True)
@@ -42,13 +39,6 @@ class EnvironmentVariable:
 
     name: str
     required: bool
-
-    @classmethod
-    def from_dict(cls, value: object) -> EnvironmentVariable:
-        """Create a declaration from one exact manifest object."""
-        if not isinstance(value, dict) or not _ENVIRONMENT.is_valid(value):
-            raise ValueError("invalid environment declaration")
-        return cls(**value)
 
 
 @dataclass(frozen=True)
@@ -65,7 +55,7 @@ class Stdio:
         if not isinstance(value, dict) or not _STDIO.is_valid(value):
             raise ValueError("invalid stdio declaration")
         variables = tuple(
-            EnvironmentVariable.from_dict(item) for item in value.get("environment", [])
+            EnvironmentVariable(**item) for item in value.get("environment", [])
         )
         if len({item.name.casefold() for item in variables}) != len(variables):
             raise ValueError("invalid environment declaration")

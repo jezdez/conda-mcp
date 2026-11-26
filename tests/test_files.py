@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from conda.common.compat import on_win
 
 from conda_mcp import files
 from conda_mcp.files import atomic_write, load_json, open_lock, read_bytes
@@ -48,7 +49,7 @@ def test_read_and_write_bounds_preserve_original_file(tmp_path):
 
 
 def test_special_files_cannot_be_read_as_regular_files(tmp_path):
-    if os.name == "nt":
+    if on_win:
         with pytest.raises((OSError, ValueError)):
             read_bytes(tmp_path)
     else:
@@ -88,7 +89,7 @@ def test_load_json_rejects_comments_and_trailing_commas(raw: bytes):
         load_json(raw)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+@pytest.mark.skipif(on_win, reason="POSIX permission bits")
 def test_atomic_write_checks_expected_and_preserves_permissions(tmp_path: Path):
     path = tmp_path / "config.json"
     path.write_bytes(b"old")
@@ -110,7 +111,63 @@ def test_atomic_write_creates_only_a_missing_leaf_when_expected_is_none(tmp_path
     assert path.read_bytes() == b"{}"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+@pytest.mark.parametrize("operation", ["fsync", "replace"])
+def test_atomic_write_failure_preserves_original_and_removes_staging(
+    tmp_path, monkeypatch, operation
+):
+    path = tmp_path / "config.json"
+    path.write_bytes(b"original")
+    error = OSError("injected write failure")
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(files.os, operation, fail)
+    with pytest.raises(OSError) as caught:
+        atomic_write(path, b"new", b"original")
+    assert caught.value is error
+    assert path.read_bytes() == b"original"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_atomic_write_preserves_a_concurrent_edit_after_staging(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    path.write_bytes(b"original")
+    fsync = os.fsync
+
+    def edit_during_flush(fd):
+        path.write_bytes(b"concurrent edit")
+        fsync(fd)
+
+    monkeypatch.setattr(files.os, "fsync", edit_during_flush)
+    with pytest.raises(ValueError, match="changed"):
+        atomic_write(path, b"new", b"original")
+    assert path.read_bytes() == b"concurrent edit"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.skipif(on_win, reason="Windows pins parent directories against renames")
+def test_atomic_write_rejects_a_disappearing_parent(tmp_path, monkeypatch):
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    path = parent / "config.json"
+    path.write_bytes(b"original")
+    moved = tmp_path / "moved"
+    fsync = os.fsync
+
+    def move_during_flush(fd):
+        parent.rename(moved)
+        fsync(fd)
+
+    monkeypatch.setattr(files.os, "fsync", move_during_flush)
+    with pytest.raises(ValueError, match="changed"):
+        atomic_write(path, b"new", b"original")
+    assert not parent.exists()
+    assert (moved / "config.json").read_bytes() == b"original"
+    assert list(moved.iterdir()) == [moved / "config.json"]
+
+
+@pytest.mark.skipif(on_win, reason="POSIX permission bits")
 def test_atomic_write_preserves_mode_despite_a_permissive_umask(tmp_path: Path):
     path = tmp_path / "config.json"
     previous = os.umask(0)
@@ -127,7 +184,7 @@ def test_file_operations_reject_path_traversal(tmp_path: Path):
         read_bytes(tmp_path / "directory" / ".." / "file", missing_ok=True)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor race")
+@pytest.mark.skipif(on_win, reason="POSIX descriptor race")
 def test_read_bytes_uses_anchored_parent_after_a_real_parent_swap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -158,7 +215,7 @@ def test_read_bytes_uses_anchored_parent_after_a_real_parent_swap(
     assert swapped
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor race")
+@pytest.mark.skipif(on_win, reason="POSIX descriptor race")
 def test_atomic_write_rejects_parent_path_replaced_after_anchoring(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -192,7 +249,7 @@ def test_atomic_write_rejects_parent_path_replaced_after_anchoring(
     assert (outside / "settings.json").read_bytes() == b"outside"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+@pytest.mark.skipif(on_win, reason="POSIX permission bits")
 def test_open_lock_creates_missing_parents_and_regular_private_leaf(tmp_path: Path):
     path = tmp_path / "nested" / "state.lock"
 
@@ -203,7 +260,7 @@ def test_open_lock_creates_missing_parents_and_regular_private_leaf(tmp_path: Pa
     assert path.stat().st_mode & 0o777 == 0o600
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+@pytest.mark.skipif(on_win, reason="POSIX permission bits")
 def test_open_lock_creates_private_leaf_despite_a_permissive_umask(tmp_path: Path):
     path = tmp_path / "state.lock"
     previous = os.umask(0)
@@ -243,10 +300,14 @@ def test_open_lock_rejects_redirected_leaf_and_hardlinked_lock(tmp_path: Path):
     with pytest.raises(ValueError, match="Unsafe"):
         with open_lock(hardlink):
             pass
-    assert stat.S_IMODE(target.stat().st_mode) == original_mode
+    if on_win:
+        assert target.read_bytes() == hardlink.read_bytes() == b"x"
+        assert target.stat().st_nlink == 2
+    else:
+        assert stat.S_IMODE(target.stat().st_mode) == original_mode
 
 
-@pytest.mark.skipif(os.name == "nt", reason="mkfifo is unavailable on Windows")
+@pytest.mark.skipif(on_win, reason="mkfifo is unavailable on Windows")
 def test_open_lock_rejects_a_fifo_without_blocking(tmp_path: Path):
     path = tmp_path / "state.lock"
     os.mkfifo(path)
@@ -256,7 +317,7 @@ def test_open_lock_rejects_a_fifo_without_blocking(tmp_path: Path):
             pass
 
 
-@pytest.mark.skipif(os.name == "nt", reason="fchmod is unavailable on Windows")
+@pytest.mark.skipif(on_win, reason="fchmod is unavailable on Windows")
 def test_open_lock_closes_descriptor_when_fchmod_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -281,7 +342,7 @@ def test_open_lock_closes_descriptor_when_fchmod_fails(
     assert len(closed) >= 2
 
 
-@pytest.mark.skipif(os.name == "nt", reason="fchmod is unavailable on Windows")
+@pytest.mark.skipif(on_win, reason="fchmod is unavailable on Windows")
 def test_atomic_write_closes_staged_descriptor_when_fchmod_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -315,18 +376,18 @@ def test_atomic_write_closes_staged_descriptor_when_fchmod_fails(
     assert not list(tmp_path.glob(".config.json.*"))
 
 
-@pytest.mark.skipif(os.name != "nt", reason="requires native Windows handles")
+@pytest.mark.skipif(not on_win, reason="requires native Windows handles")
 def test_windows_file_operations_reject_device_namespaces(tmp_path: Path):
     with pytest.raises(ValueError, match="Unsafe"):
         read_bytes(Path(r"\\.\NUL"), missing_ok=True)
 
 
-@pytest.mark.skipif(os.name != "nt", reason="requires native Windows handles")
+@pytest.mark.skipif(not on_win, reason="requires native Windows handles")
 def test_windows_read_allows_missing_parent_when_missing_is_allowed(tmp_path: Path):
     assert read_bytes(tmp_path / "absent" / "file", missing_ok=True) is None
 
 
-@pytest.mark.skipif(os.name != "nt", reason="requires native Windows handles")
+@pytest.mark.skipif(not on_win, reason="requires native Windows handles")
 def test_windows_lock_keeps_parent_handles_open_until_the_lock_closes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -343,7 +404,7 @@ def test_windows_lock_keeps_parent_handles_open_until_the_lock_closes(
     assert closed
 
 
-@pytest.mark.skipif(os.name != "nt", reason="requires native Windows handles")
+@pytest.mark.skipif(not on_win, reason="requires native Windows handles")
 def test_windows_create_file_signature_and_descriptor_are_safe(tmp_path: Path):
     assert len(files._kernel32.CreateFileW.argtypes) == 7
     descriptor = files._windows_fd(
@@ -355,7 +416,7 @@ def test_windows_create_file_signature_and_descriptor_are_safe(tmp_path: Path):
         os.close(descriptor)
 
 
-@pytest.mark.skipif(os.name != "nt", reason="requires native Windows junctions")
+@pytest.mark.skipif(not on_win, reason="requires native Windows junctions")
 def test_windows_file_operations_reject_junction_parent(tmp_path: Path):
     outside = tmp_path / "outside"
     outside.mkdir()

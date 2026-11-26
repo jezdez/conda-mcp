@@ -18,6 +18,17 @@ if TYPE_CHECKING:
 
 def execute(args: Namespace) -> int:
     """Load only the selected command handler."""
+    if args.mcp_command is None:
+        from argparse import ArgumentParser
+
+        from .parser import configure
+
+        helper = ArgumentParser(
+            prog="conda mcp", description="Manage conda-packaged MCP servers."
+        )
+        configure(helper)
+        print(helper.format_help(), end="")
+        return 0
     try:
         return import_module(f".{args.mcp_command}", __package__).execute(args)
     except CondaError:

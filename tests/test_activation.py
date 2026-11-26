@@ -5,9 +5,13 @@ import sys
 from pathlib import Path
 
 import pytest
+from conda import utils as conda_utils
+from conda.common.compat import on_win
+
+from conda_mcp.run import _activation_wrapper
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation")
+@pytest.mark.skipif(on_win, reason="POSIX activation")
 def test_activated_server_keeps_hook_output_off_protocol(tmp_path):
     prefix = tmp_path / "server prefix"
     meta = prefix / "conda-meta"
@@ -71,3 +75,18 @@ def test_activated_server_keeps_hook_output_off_protocol(tmp_path):
     assert result.stdout == b"protocol\n"
     assert b"activate-noise" in result.stderr
     assert b"deactivate-noise" in result.stderr
+
+
+@pytest.mark.skipif(on_win, reason="simulates Windows activation on POSIX")
+def test_activation_wrapper_accepts_condas_native_batch_wrapper(tmp_path, monkeypatch):
+    monkeypatch.setattr(conda_utils, "on_win", True)
+    monkeypatch.setattr(conda_utils, "get_comspec", lambda: "cmd.exe")
+
+    wrapper, command = _activation_wrapper(tmp_path / "prefix", Path(sys.executable))
+
+    source = wrapper.read_text(encoding="utf-8")
+    assert '@CALL "' in source
+    assert command[1:4] == ["/d", "/v:off", "/d"]
+    assert command[-2:] == ["/c", str(wrapper)]
+    assert 'set "_CONDA_MCP_EXIT=%ERRORLEVEL%"' in source
+    assert "exit /b %_CONDA_MCP_EXIT%" in source

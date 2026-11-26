@@ -5,9 +5,13 @@ import json
 
 import pytest
 from conda.base.context import context
+from conda.common.compat import on_win
 from conda.core.prefix_data import PrefixData
+from conda.exceptions import CondaValueError
 
+from conda_mcp.cli import main as main_command
 from conda_mcp.cli import register as register_command
+from conda_mcp.cli import registry as registry_command
 from conda_mcp.cli import render as render_command
 from conda_mcp.cli import run as run_command
 from conda_mcp.cli.parser import configure
@@ -110,6 +114,7 @@ def test_registry_human_output_distinguishes_empty_and_registered_entries(
     assert "Effective" not in result.stdout
 
 
+@pytest.mark.skipif(on_win, reason="Windows treats a non-directory parent as absent")
 def test_registry_filesystem_errors_are_conda_errors(cli, tmp_path):
     (tmp_path / "project/.cursor").write_text("not a directory", encoding="utf-8")
     result = cli("registry", "--client", "cursor", "--json")
@@ -117,6 +122,20 @@ def test_registry_filesystem_errors_are_conda_errors(cli, tmp_path):
     document = json.loads(result.stdout)
     assert "traceback" not in document
     assert document["exception_name"] in {"CondaError", "CondaValueError"}
+
+
+def test_registry_translates_filesystem_errors_to_conda_errors(monkeypatch):
+    parser = argparse.ArgumentParser()
+    configure(parser)
+    args = parser.parse_args(["registry", "--client", "cursor"])
+
+    def fail_registration(*args, **kwargs):
+        raise PermissionError(13, "access denied")
+
+    monkeypatch.setattr(registry_command, "registration", fail_registration)
+
+    with pytest.raises(CondaValueError, match="access denied"):
+        main_command.execute(args)
 
 
 def test_list_uses_named_environment_from_explicit_conda_envs_path(

@@ -14,6 +14,18 @@ from pathlib import Path
 HOST = Path(os.environ.get("CONDA_MCP_HOST_PYTHON", sys.executable)).resolve()
 
 
+def _runtime_dependencies() -> list[str]:
+    dependencies = [
+        "conda>=26.10",
+        "python>=3.11",
+        "rich>=13",
+        "tomlkit>=0.13",
+    ]
+    if os.name == "nt":
+        dependencies.append("pywin32>=311")
+    return dependencies
+
+
 def main() -> None:
     """Install exactly one local wheel without fetching dependencies."""
     root = Path(__file__).resolve().parents[1]
@@ -56,10 +68,7 @@ def main() -> None:
                 "conda-forge",
                 "-p",
                 str(prefix),
-                "conda>=26.10",
-                "python>=3.11",
-                "rich>=13",
-                "tomlkit>=0.13",
+                *_runtime_dependencies(),
                 "pip",
             ],
             env=environment,

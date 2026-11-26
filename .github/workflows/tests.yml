@@ -65,6 +65,7 @@ jobs:
         run: conda task run -e ${{ matrix.environment }} test-ci
         env:
           COVERAGE_FILE: .coverage.${{ matrix.os }}-${{ matrix.environment }}
+          CONDA_MCP_EXECV_PATCH: ${{ runner.os == 'Windows' && 'subprocess' || 'execv' }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with:

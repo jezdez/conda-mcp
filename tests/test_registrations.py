@@ -7,6 +7,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 from conda import CondaError
+from conda.common.compat import on_win
 
 from conda_mcp import registrations
 from conda_mcp.clients.manager import config_target
@@ -154,7 +155,7 @@ def test_toml_comments_foreign_policy_and_mode_survive(tmp_path, source, entry):
     text = target.path.read_text()
     assert "# keep this comment" in text and "# and this" in text
     assert "enabled=false" in text
-    if os.name != "nt":
+    if not on_win:
         assert target.path.stat().st_mode & 0o777 == 0o640
     registration(target, "demo")
     assert "[mcp_servers.demo]" not in target.path.read_text()

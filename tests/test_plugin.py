@@ -61,7 +61,6 @@ def test_destination_commands_reject_source_selection(parser, selector):
 @pytest.mark.parametrize(
     "arguments, code",
     [
-        ([], 2),
         (["--help"], 0),
         (["list", "-n", "x", "-p", "y"], 2),
         (["register", "example"], 2),
@@ -71,6 +70,39 @@ def test_standard_parser_behavior(parser, arguments, code):
     with pytest.raises(SystemExit) as error:
         parser.parse_args(arguments)
     assert error.value.code == code
+
+
+def test_bare_invocation_prints_help(capsys):
+    assert action(argparse.Namespace(mcp_command=None)) == 0
+    output = capsys.readouterr().out
+    assert "serve" in output
+    assert "register" in output
+
+
+def test_serve_accepts_target_and_limits(parser):
+    args = parser.parse_args(["serve", "--timeout", "30", "--allow-write"])
+    assert args.timeout == 30
+    assert args.output_limit_bytes == 1_048_576
+    assert args.allow_write is True
+    assert args.allow_exec is False
+
+
+def test_serve_reports_version_without_starting(parser, capsys):
+    with pytest.raises(SystemExit) as error:
+        parser.parse_args(["serve", "--version"])
+
+    assert error.value.code == 0
+    assert capsys.readouterr().out.strip()
+
+
+def test_serve_rejects_invalid_timeout(parser):
+    from conda.exceptions import CondaValueError
+
+    from conda_mcp.cli.serve import execute
+
+    args = parser.parse_args(["serve", "--timeout", "0"])
+    with pytest.raises(CondaValueError, match="greater than zero"):
+        execute(args)
 
 
 def test_run_preserves_remainder(parser):

@@ -15,7 +15,28 @@ _CLIENTS = ("claude-code", "copilot", "codex", "kilo", "claude-desktop", "cursor
 
 def configure(parser: ArgumentParser) -> None:
     """Keep environment selection independent of client destination scope."""
-    commands = parser.add_subparsers(dest="mcp_command", required=True)
+    commands = parser.add_subparsers(dest="mcp_command")
+    serve = commands.add_parser(
+        "serve", help="Expose a conda installation through MCP over stdio."
+    )
+    serve.add_argument(
+        "--timeout", type=float, default=900, help="Command timeout in seconds."
+    )
+    serve.add_argument(
+        "--output-limit-bytes", type=int, default=1_048_576, help="Retained output."
+    )
+    serve.add_argument(
+        "--stdin-limit-bytes", type=int, default=1_048_576, help="Accepted input."
+    )
+    serve.add_argument(
+        "--allow-write", action="store_true", help="Allow mutating conda operations."
+    )
+    serve.add_argument(
+        "--allow-exec", action="store_true", help="Expose raw argv execution."
+    )
+    from ..serving import __version__
+
+    serve.add_argument("--version", action="version", version=__version__)
     listing = commands.add_parser(
         "list", help="List package-owned servers in the source environment."
     )

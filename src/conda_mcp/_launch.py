@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from conda import CondaError
+from conda.common.compat import on_win
 
 from .run import _PAYLOAD, LaunchPayload
 
@@ -18,7 +19,7 @@ def main() -> int:
         executable = payload.revalidate()
         payload.restore_protocol()
         os.chdir(payload.cwd)
-        if os.name == "nt":
+        if on_win:
             # Windows exec creates a new process and exits immediately. Keep the
             # job-owned trampoline alive until the server's real exit status exists.
             return subprocess.run(

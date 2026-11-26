@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import os
 import select
@@ -9,6 +11,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from conda import CondaError
+from conda.common.compat import on_win
 from pip._vendor.distlib.scripts import ScriptMaker
 
 from conda_mcp.run import (
@@ -21,6 +25,19 @@ from conda_mcp.run import (
 from conda_mcp.servers import Server, discover
 
 PROBE = Path(__file__).with_name("activation_probe.py")
+
+
+def test_asyncio_subprocess_transport_receives_protocol_object():
+    """Guard the private test-only cancellation hook used on Windows."""
+    loop = asyncio.new_event_loop()
+    try:
+        signature = inspect.signature(loop._make_subprocess_transport)
+        assert next(iter(signature.parameters)) == "protocol"
+        source = inspect.getsource(asyncio.base_events.BaseEventLoop.subprocess_exec)
+        assert "protocol = protocol_factory()" in source
+        assert "self._make_subprocess_transport(\n            protocol," in source
+    finally:
+        loop.close()
 
 
 def test_run_requires_a_stdio_server(tmp_path: Path):
@@ -43,7 +60,7 @@ def test_run_requires_a_stdio_server(tmp_path: Path):
         run(server, ())
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation")
+@pytest.mark.skipif(on_win, reason="POSIX activation")
 def test_run_preserves_literal_arguments_and_protocol_streams(
     install_package, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -78,7 +95,7 @@ def test_run_preserves_literal_arguments_and_protocol_streams(
     ]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation")
+@pytest.mark.skipif(on_win, reason="POSIX activation")
 def test_run_stops_when_activation_hook_fails(install_package, tmp_path: Path):
     prefix = install_package(
         manifest={
@@ -106,7 +123,7 @@ def test_trampoline_rejects_oversized_or_invalid_payload():
         LaunchPayload.decode("x" * 65537)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
 def test_wait_kills_process_group_after_interrupt():
     process = subprocess.Popen(
         ["/bin/sh", "-c", "trap '' TERM; sleep 30"], start_new_session=True
@@ -120,7 +137,18 @@ def test_wait_kills_process_group_after_interrupt():
             process.wait()
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
+def test_interrupt_never_signals_the_callers_process_group(monkeypatch):
+    from types import SimpleNamespace
+
+    sent = []
+    monkeypatch.setattr(os, "killpg", lambda *args: sent.append(args))
+    with pytest.raises(CondaError, match="caller's process group"):
+        _reap_after_interrupt(SimpleNamespace(pid=os.getpgrp()), grace=0)
+    assert sent == []
+
+
+@pytest.mark.skipif(on_win, reason="POSIX process groups")
 def test_reap_waits_without_sigkill_when_process_group_has_exited(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -156,22 +184,22 @@ def test_reap_waits_without_sigkill_when_process_group_has_exited(
 def executable_server(install_package):
     """Install a recorded interpreter wrapper and a real protocol test server."""
     fixture = Path(__file__).with_name("fixtures") / "stdio_server.py"
-    relative = "Scripts/example.exe" if os.name == "nt" else "bin/python"
+    relative = "Scripts/example.exe" if on_win else "bin/python"
     prefix = install_package(
         manifest={
             "schema_version": 1,
             "name": "example",
             "description": "Example",
             "stdio": {
-                "command": "example.exe" if os.name == "nt" else "python",
-                "args": [] if os.name == "nt" else [str(fixture)],
+                "command": "example.exe" if on_win else "python",
+                "args": [] if on_win else [str(fixture)],
                 "environment": [{"name": "MCP_TEST_TOKEN", "required": True}],
             },
         },
         files={relative: b""},
     )
     executable = prefix / relative
-    if os.name == "nt":
+    if on_win:
         executable.unlink()
         source = prefix / "source"
         source.mkdir()
@@ -206,7 +234,7 @@ def test_protocol_streams_before_exit_and_receives_eof(executable_server):
             process.communicate(timeout=5)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX deactivation script")
+@pytest.mark.skipif(on_win, reason="POSIX deactivation script")
 def test_exit_status_survives_deactivation_and_argv_is_literal(
     executable_server, tmp_path
 ):
@@ -250,7 +278,7 @@ def test_missing_required_variable_fails_without_protocol_output(executable_serv
     assert "MCP_TEST_TOKEN" in result.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation script")
+@pytest.mark.skipif(on_win, reason="POSIX activation script")
 def test_noisy_activation_cannot_consume_protocol_input(executable_server):
     hook = executable_server / "etc/conda/activate.d/noisy.sh"
     hook.parent.mkdir(parents=True)
@@ -271,7 +299,7 @@ def test_noisy_activation_cannot_consume_protocol_input(executable_server):
     assert "STOLE INPUT" not in result.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX native process-group cleanup")
+@pytest.mark.skipif(on_win, reason="POSIX native process-group cleanup")
 def test_repeated_signals_terminate_ignoring_descendants(executable_server, tmp_path):
     pid_file = tmp_path / "child.pid"
     process = subprocess.Popen(
@@ -302,7 +330,7 @@ def test_repeated_signals_terminate_ignoring_descendants(executable_server, tmp_
             process.communicate(timeout=5)
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation scripts")
+@pytest.mark.skipif(on_win, reason="POSIX activation scripts")
 @pytest.mark.parametrize("replacement", ["manifest", "provider", "executable"])
 def test_activation_cannot_replace_selected_inputs(executable_server, replacement):
     hook = executable_server / "etc/conda/activate.d/replace.sh"
@@ -328,7 +356,7 @@ def test_activation_cannot_replace_selected_inputs(executable_server, replacemen
     assert "STOLEN" not in result.stderr
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX activation quoting")
+@pytest.mark.skipif(on_win, reason="POSIX activation quoting")
 @pytest.mark.parametrize(
     "name",
     [
@@ -358,7 +386,7 @@ def test_activation_hook_paths_never_get_shell_evaluated(
 def test_unsafe_native_override_paths_are_rejected(tmp_path, monkeypatch):
     for name in ("CONDA_EXE", "TMPDIR", "CONDA_BAT", "CONDA_PREFIX"):
         with monkeypatch.context() as patch:
-            patch.setenv(name, "unsafe%path\n" if os.name == "nt" else "unsafe$(path)")
+            patch.setenv(name, "unsafe%path\n" if on_win else "unsafe$(path)")
             with pytest.raises(Exception, match="Unsafe path"):
                 _check_activation_paths(tmp_path)
 
@@ -366,9 +394,7 @@ def test_unsafe_native_override_paths_are_rejected(tmp_path, monkeypatch):
 def test_stacked_activation_paths_are_validated_before_wrapper_generation(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setenv(
-        "CONDA_PREFIX_1", "unsafe%path\n" if os.name == "nt" else "unsafe$(path)"
-    )
+    monkeypatch.setenv("CONDA_PREFIX_1", "unsafe%path\n" if on_win else "unsafe$(path)")
     with pytest.raises(Exception, match="Unsafe path"):
         _check_activation_paths(tmp_path)
 
@@ -414,6 +440,40 @@ def test_native_batch_wrapper_suppresses_autorun_and_checks_exit(tmp_path, monke
     assert "exit /b %_CONDA_MCP_EXIT%" in wrapper.read_text()
 
 
+@pytest.mark.parametrize(
+    ("suffix", "source", "command"),
+    [
+        (".bat", "python -I -m conda_mcp._launch\nexit /b 0\n", ["cmd.exe", "/c"]),
+        (".bat", "CALL conda.bat activate prefix\nexit /b 0\n", ["cmd.exe", "/c"]),
+        (
+            ".bat",
+            "CALL conda.bat activate prefix\npython -I -m conda_mcp._launch\n",
+            ["cmd.exe", "/c"],
+        ),
+        (
+            ".bat",
+            "CALL conda.bat activate prefix\n"
+            "python -I -m conda_mcp._launch\nexit /b 0\n",
+            ["cmd.exe", "/k"],
+        ),
+        (".sh", "conda activate prefix\npython -I -m conda_mcp._launch\n", ["bash"]),
+        (".sh", 'eval "$(conda shell.posix hook)"\nconda activate prefix\n', ["bash"]),
+    ],
+)
+def test_unsupported_activation_wrapper_is_removed(
+    tmp_path, monkeypatch, suffix, source, command
+):
+    wrapper = tmp_path / ("wrapper" + suffix)
+    wrapper.write_text(source)
+    monkeypatch.setattr(
+        "conda_mcp.run.wrap_subprocess_call",
+        lambda *args: (str(wrapper), [*command, str(wrapper)]),
+    )
+    with pytest.raises(CondaError, match="unsupported activation wrapper"):
+        _activation_wrapper(tmp_path, Path(sys.executable))
+    assert not wrapper.exists()
+
+
 def test_conda_batch_wrapper_preserves_activation_and_deactivates(
     tmp_path, monkeypatch
 ):
@@ -431,7 +491,7 @@ def test_conda_batch_wrapper_preserves_activation_and_deactivates(
         wrapper.unlink()
 
 
-@pytest.mark.skipif(os.name != "nt", reason="native Windows activation")
+@pytest.mark.skipif(not on_win, reason="native Windows activation")
 def test_windows_failing_activation_never_executes_server(executable_server):
     hook = executable_server / "etc/conda/activate.d/fail.bat"
     hook.parent.mkdir(parents=True)
@@ -445,3 +505,45 @@ def test_windows_failing_activation_never_executes_server(executable_server):
     )
     assert result.returncode != 0 and result.stdout == ""
     assert "Activation script" in result.stderr
+
+
+@pytest.mark.skipif(not on_win, reason="native Windows activation")
+def test_windows_activation_preserves_protocol_bytes_and_literal_arguments(
+    executable_server,
+):
+    hook = executable_server / "etc/conda/activate.d/noisy.bat"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(
+        "@echo off\necho ACTIVATION STDOUT\necho ACTIVATION STDERR 1>&2\n"
+        'set /p ignored=\nset "MCP_TEST_TOKEN=activated"\nexit /b 0\n',
+        encoding="utf-8",
+    )
+    protocol = b'{"literal": "snowman \\u2603"}\n'
+    result = subprocess.run(
+        [sys.executable, "-I", str(PROBE), str(executable_server)],
+        input=protocol,
+        capture_output=True,
+        timeout=30,
+        env={**os.environ, "MCP_TEST_TOKEN": "present"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == b"READY\n" + protocol + b"EOF\n"
+    assert b"ACTIVATION STDOUT" in result.stderr
+    assert b"ACTIVATION STDERR" in result.stderr
+
+    arguments = ["", "two words", "snowman \u2603", "$(literal) & ^"]
+    metadata = subprocess.run(
+        [sys.executable, "-I", str(PROBE), str(executable_server), *arguments],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={
+            **os.environ,
+            "MCP_TEST_TOKEN": "present",
+            "MCP_TEST_MODE": "metadata",
+        },
+    )
+    assert metadata.returncode == 0, metadata.stderr
+    assert json.loads(metadata.stdout)["argv"] == arguments
+    assert json.loads(metadata.stdout)["token"] == "activated"

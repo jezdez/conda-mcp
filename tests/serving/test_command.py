@@ -130,6 +130,34 @@ def test_optional_values_round_trip_through_the_discovered_parser(
 
 
 @pytest.mark.parametrize(
+    ("options", "value", "expected", "parsed"),
+    [
+        ({"type": int}, 2.0, ("--value", "2"), 2),
+        ({"action": "append", "type": int}, [2.0], ("--value", "2"), [2]),
+        (
+            {"action": "extend", "type": int, "nargs": 2},
+            [2.0, 3.0],
+            ("--value", "2", "3"),
+            [2, 3],
+        ),
+        ({"action": "count"}, 2.0, ("--value", "--value"), 2),
+    ],
+)
+def test_integral_json_numbers_round_trip_through_argparse(
+    options, value, expected, parsed
+) -> None:
+    parser = argparse.ArgumentParser(prog="conda")
+    child = parser.add_subparsers(dest="command").add_parser("example")
+    child.add_argument("--value", **options)
+    tool = command_tools(inspect_parser(parser, conda_version="test"))[0]
+
+    compiled = tool.compile({"value": value})
+
+    assert compiled == ("example", *expected)
+    assert parser.parse_args(compiled).value == parsed
+
+
+@pytest.mark.parametrize(
     ("options", "value", "invalid", "argv", "parsed"),
     [
         ({"action": "append", "required": True}, ["a"], [], ("--value", "a"), ["a"]),

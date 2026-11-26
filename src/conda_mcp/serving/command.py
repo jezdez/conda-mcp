@@ -127,6 +127,9 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
 
 def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
     """Compile one schema-validated argument value into canonical argv tokens."""
+    def token(item: Any) -> str:
+        return str(int(item)) if argument.value_type == "integer" else str(item)
+
     flag = next(
         (candidate for candidate in argument.flags if candidate.startswith("--")),
         argument.flags[0] if argument.flags else None,
@@ -138,8 +141,8 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
             if argument.nargs == "?" and value is None:
                 return prefix
             if argument.nargs in (None, "?"):
-                return (*prefix, str(value))
-            return (*prefix, *(str(item) for item in value))
+                return (*prefix, token(value))
+            return (*prefix, *(token(item) for item in value))
         case ActionKind.APPEND:
             tokens: list[str] = []
             for occurrence in value:
@@ -148,9 +151,9 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
                 if argument.nargs == "?" and occurrence is None:
                     continue
                 if argument.nargs in (None, "?"):
-                    tokens.append(str(occurrence))
+                    tokens.append(token(occurrence))
                 else:
-                    tokens.extend(str(item) for item in occurrence)
+                    tokens.extend(token(item) for item in occurrence)
             return tuple(tokens)
         case ActionKind.EXTEND:
             tokens = []
@@ -159,11 +162,11 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
                     if flag:
                         tokens.append(flag)
                     if item is not None:
-                        tokens.append(str(item))
+                        tokens.append(token(item))
                 return tuple(tokens)
             if flag:
                 tokens.append(flag)
-            tokens.extend(str(item) for item in value)
+            tokens.extend(token(item) for item in value)
             return tuple(tokens)
         case ActionKind.STORE_TRUE | ActionKind.STORE_CONST:
             if value:
@@ -208,13 +211,17 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
         case ActionKind.APPEND_CONST | ActionKind.COUNT:
             if flag is None:
                 raise ValueError(f"{argument.id} requires an option flag")
-            if type(value) is not int or not 0 <= value <= MAX_REPEAT_COUNT:
+            if (
+                type(value) not in (int, float)
+                or not 0 <= value <= MAX_REPEAT_COUNT
+                or int(value) != value
+            ):
                 raise ValueError(f"{argument.id} repeat count is out of range")
-            return (flag,) * value
+            return (flag,) * int(value)
         case ActionKind.EXTEND_CONST:
             if flag is None:
                 raise ValueError(f"{argument.id} requires an option flag")
-            return (flag, *(str(item) for item in value))
+            return (flag, *(token(item) for item in value))
 
 
 def argument_active_schema(

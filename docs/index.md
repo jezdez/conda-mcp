@@ -53,7 +53,7 @@ Ship a Python server, then adapt the recipe for Node, wrappers, or remote endpoi
 
 ::::
 
-For the reasons behind discovery and permissions, read {doc}`explanation/serving`. {doc}`explanation/lifecycle` covers package ownership, activation, and process cleanup. The {doc}`reference/glossary` defines terms used throughout the guides, and the {ref}`genindex` lists terms and command options alphabetically.
+For the reasons behind discovery and permissions, read {doc}`explanation/serving`. {doc}`explanation/lifecycle` covers package ownership, activation, and process cleanup. {doc}`explanation/prior-art` compares conda-mcp with other MCP and conda tools. The {doc}`reference/glossary` defines terms used throughout the guides, and the {ref}`genindex` lists terms and command options alphabetically.
 
 :::{admonition} Moving from conda-cli-mcp
 :class: seealso
@@ -113,4 +113,5 @@ reference/glossary
 
 explanation/serving
 explanation/lifecycle
+explanation/prior-art
 ```

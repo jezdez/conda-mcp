@@ -366,7 +366,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
         (make_argument(ActionKind.STORE_CONST), {"type": "boolean"}),
         (
             make_argument(ActionKind.APPEND_CONST),
-            {"type": "integer", "minimum": 0},
+            {"type": "integer", "minimum": 0, "maximum": 128},
         ),
         (
             make_argument(ActionKind.EXTEND_CONST),
@@ -374,7 +374,7 @@ def test_command_tools_build_canonical_leaves_and_preserve_scope() -> None:
         ),
         (
             make_argument(ActionKind.COUNT),
-            {"type": "integer", "minimum": 0},
+            {"type": "integer", "minimum": 0, "maximum": 128},
         ),
     ],
 )
@@ -401,11 +401,33 @@ def test_argument_input_schema_converts_numeric_choices_and_requirements() -> No
         "enum": [1, 3],
         "description": "Number of retries.",
     }
-    assert argument_input_schema(count) == {"type": "integer", "minimum": 1}
+    assert argument_input_schema(count) == {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 128,
+    }
     assert argument_input_schema(disabled) == {
         "type": "boolean",
         "const": False,
     }
+
+
+@pytest.mark.parametrize("action", [ActionKind.COUNT, ActionKind.APPEND_CONST])
+def test_repeated_flags_have_a_small_finite_limit(action: ActionKind) -> None:
+    tool = make_tool(make_argument(action))
+    maximum = tool.input_schema["properties"]["value"]["maximum"]
+
+    assert 4 < maximum <= 256
+    assert tool.compile({"value": maximum}) == (
+        "example",
+        *("--value",) * maximum,
+    )
+    with pytest.raises(ValidationError):
+        tool.compile({"value": maximum + 1})
+    with pytest.raises(ValidationError):
+        tool.compile({"value": 2**100})
+    with pytest.raises(ValueError, match="repeat count"):
+        argument_argv(make_argument(action), maximum + 1)
 
 
 @pytest.mark.parametrize(

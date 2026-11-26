@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 PASSTHROUGH_ARGUMENT = "args"
 TOOL_PREFIX = "conda"
+MAX_REPEAT_COUNT = 128
 
 
 def canonical_tool_name(
@@ -110,7 +111,11 @@ def argument_input_schema(argument: Argument) -> dict[str, Any]:
         case ActionKind.BOOLEAN:
             schema = {"type": "boolean"}
         case ActionKind.APPEND_CONST | ActionKind.COUNT:
-            schema = {"type": "integer", "minimum": 1 if argument.required else 0}
+            schema = {
+                "type": "integer",
+                "minimum": 1 if argument.required else 0,
+                "maximum": MAX_REPEAT_COUNT,
+            }
         case ActionKind.EXTEND_CONST:
             schema = {"type": "array", "items": scalar}
 
@@ -203,6 +208,8 @@ def argument_argv(argument: Argument, value: Any) -> tuple[str, ...]:
         case ActionKind.APPEND_CONST | ActionKind.COUNT:
             if flag is None:
                 raise ValueError(f"{argument.id} requires an option flag")
+            if type(value) is not int or not 0 <= value <= MAX_REPEAT_COUNT:
+                raise ValueError(f"{argument.id} repeat count is out of range")
             return (flag,) * value
         case ActionKind.EXTEND_CONST:
             if flag is None:

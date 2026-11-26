@@ -439,6 +439,30 @@ async def test_manager_commands_follow_the_same_policy(
     assert executor.calls == [("mcp", "list")]
 
 
+@pytest.mark.anyio
+async def test_plugin_inspection_tools_run_without_write_permission(
+    server_factory: ServerFactory,
+) -> None:
+    executor = RecordingExecutor()
+    plugins = Command(
+        name="plugins",
+        terminal=False,
+        children=(Command(name="info"), Command(name="list"), Command(name="enable")),
+    )
+    server = server_factory(executor, (plugins,), SafetyPolicy())
+
+    async with Client(server.server) as client:
+        listed = {tool.name: tool for tool in (await client.list_tools()).tools}
+        await client.call_tool("conda_plugins_info", {})
+        await client.call_tool("conda_plugins_list", {})
+        with pytest.raises(MCPError):
+            await client.call_tool("conda_plugins_enable", {})
+
+    assert listed["conda_plugins_info"].annotations.read_only_hint is True
+    assert listed["conda_plugins_list"].annotations.read_only_hint is True
+    assert executor.calls == [("plugins", "info"), ("plugins", "list")]
+
+
 @pytest.mark.parametrize(
     ("allow_write", "allow_exec", "spawned"),
     [

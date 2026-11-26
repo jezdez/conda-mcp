@@ -79,6 +79,7 @@ class SafetyPolicy:
                     }
                 ),
                 ("menuinst",): frozenset({"install", "remove"}),
+                ("plugins",): frozenset({"info", "list"}),
                 ("pypi",): frozenset({"convert", "index", "install"}),
                 ("repoquery",): frozenset({"depends", "search", "whoneeds"}),
                 ("self",): frozenset({"install", "remove", "reset", "update"}),
@@ -267,6 +268,10 @@ class SafetyPolicy:
             requires_write = bool(option_names & {"--fix", "--heal"})
             read_only = not requires_write
             open_world = False
+        elif path in {("plugins", "info"), ("plugins", "list")}:
+            read_only = True
+            open_world = False
+            requires_write = False
         elif top_level == "env":
             if path in {
                 ("env",),

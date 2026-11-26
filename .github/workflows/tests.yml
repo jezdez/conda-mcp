@@ -112,13 +112,13 @@ jobs:
       - run: conda install -n base --yes --override-channels -c conda-forge 'conda>=26.10' 'conda-workspaces>=0.12'
       - run: conda workspace install --locked -e build
       - run: conda workspace install --locked -e docs
-      - run: conda task run -e build build
-      - run: conda task run -e build check-dist
-      - run: conda task run -e build test-wheel
-      - run: conda task run -e build test-examples
-      - run: conda task run -e build build-conda
-      - run: conda task run -e build check-workflows
-      - run: conda task run -e docs docs
+      - run: conda task run build
+      - run: conda task run check-dist
+      - run: conda task run test-wheel
+      - run: conda task run test-examples
+      - run: conda task run build-conda
+      - run: conda task run check-workflows
+      - run: conda task run docs
 
   windows-examples:
     name: Windows example checks
@@ -135,4 +135,4 @@ jobs:
           auto-activate: true
       - run: conda install -n base --yes --override-channels -c conda-forge 'conda>=26.10' 'conda-workspaces>=0.12'
       - run: conda workspace install --locked -e build
-      - run: conda task run -e build test-examples
+      - run: conda task run test-examples

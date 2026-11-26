@@ -101,6 +101,6 @@ fastmcp call server.json greet name=Conda --timeout 30
 
 The expected reply is `Hello, Conda!`. This checks that the installed executable starts after activation and answers an MCP request. Keep checks for your own tool's inputs and results alongside the package source.
 
-For this repository, `conda task run -e build test-examples` builds all maintained examples with both builders, installs them into temporary prefixes, and exercises their intended behaviour. The remote and wrapper examples are metadata fixtures, so their checks do not claim a live hosted connection or a wrapper-provided MCP implementation.
+For this repository, `conda task run test-examples` builds all maintained examples with both builders, installs them into temporary prefixes, and exercises their intended behaviour. The remote and wrapper examples are metadata fixtures, so their checks do not claim a live hosted connection or a wrapper-provided MCP implementation.
 
 Deactivate and remove the disposable server environment when finished, and delete `server.json`. If you also registered the server, unregister it before removing the environment. See {doc}`recover-registrations` for registrations left behind by package removal.

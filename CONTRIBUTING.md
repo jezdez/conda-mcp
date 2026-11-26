@@ -13,10 +13,10 @@ Run artifact checks after packaging changes:
 
 ```sh
 conda workspace install --locked -e build
-conda task run -e build build
-conda task run -e build check-dist
-conda task run -e build test-wheel
-conda task run -e build test-examples
+conda task run build
+conda task run check-dist
+conda task run test-wheel
+conda task run test-examples
 ```
 
 Tests use temporary prefixes and real package records. Do not commit generated build output, credentials, or changes to the generated version file.
@@ -37,7 +37,7 @@ Install the locked docs environment and build the site:
 
 ```sh
 conda workspace install --locked -e docs
-conda task run -e docs docs
+conda task run docs
 ```
 
 After changing directives or page structure, also check the text builder so the content remains readable without HTML components:

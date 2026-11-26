@@ -10,7 +10,7 @@ From the repository root, build the plugin and example package:
 
 ```sh
 conda workspace install --locked -e build
-conda task run -e build build-conda
+conda task run build-conda
 conda workspace run -e build -- rattler-build build -r examples/fastmcp/recipe.yaml --output-dir conda-dist -c conda-forge
 vhs demos/use-a-server.tape
 vhs demos/inspect.tape
@@ -33,4 +33,4 @@ The setup removes inherited conda and client path overrides. It does not launch 
 
 `_settings.tape` supplies their shared appearance. `conda-session` and `recover-registration` also check their expected JSON results before exiting.
 
-Watch the generated GIFs before keeping them. Check that every command succeeds and its output fits, then run `conda task run -e docs docs`. Keep the text equivalents in `docs/demos.md` synchronised with the tapes.
+Watch the generated GIFs before keeping them. Check that every command succeeds and its output fits, then run `conda task run docs`. Keep the text equivalents in `docs/demos.md` synchronised with the tapes.

@@ -20,14 +20,14 @@ conda task run -e py311 check
 conda workspace install --locked -e py314
 conda task run -e py314 check
 conda workspace install --locked -e docs
-conda task run -e docs docs
+conda task run docs
 conda workspace install --locked -e build
-conda task run -e build build
-conda task run -e build check-dist
-conda task run -e build test-wheel
-conda task run -e build test-examples
-conda task run -e build build-conda
-conda task run -e build check-workflows
+conda task run build
+conda task run check-dist
+conda task run test-wheel
+conda task run test-examples
+conda task run build-conda
+conda task run check-workflows
 conda workspace run -e build -- python -m hatchling version
 ```
 

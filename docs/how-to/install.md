@@ -10,7 +10,7 @@ Run these commands from the repository root:
 
 ```sh
 conda workspace install --locked -e build
-conda task run -e build build-conda
+conda task run build-conda
 ```
 
 The task sets the recipe version from Git and writes the package and local channel metadata under `conda-dist/`. Keep that directory available for installation.

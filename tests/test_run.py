@@ -256,7 +256,7 @@ def test_run_ignores_unrelated_invalid_declaration(
 def test_direct_run_keeps_plugin_output_off_protocol(
     executable_server: Path, noisy_conda_venv: Path
 ) -> None:
-    process = subprocess.Popen(
+    completed = subprocess.run(
         [
             str(noisy_conda_venv),
             "-I",
@@ -269,23 +269,21 @@ def test_direct_run_keeps_plugin_output_off_protocol(
             "provider",
             "example",
         ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env={**os.environ, "MCP_TEST_TOKEN": ""},
+        input=b"PROTOCOL\n",
+        capture_output=True,
+        timeout=30,
+        env={
+            **os.environ,
+            "MCP_TEST_TOKEN": "",
+            # Activation scripts belong to the conda install, not the test venv.
+            "CONDA_ROOT_PREFIX": sys.prefix,
+        },
     )
-    try:
-        assert process.stdout is not None
-        assert process.stdout.readline() == b"READY\n"
-        stdout, stderr = process.communicate(b"PROTOCOL\n", timeout=30)
-        assert process.returncode == 0, stderr
-        assert stdout == b"PROTOCOL\nEOF\n"
-        assert b"NOISY_CONDA_PLUGIN" not in stdout
-        assert b"NOISY_CONDA_PLUGIN" in stderr
-    finally:
-        if process.poll() is None:
-            process.kill()
-            process.communicate(timeout=5)
+
+    assert completed.returncode == 0, completed.stderr.decode(errors="replace")
+    assert completed.stdout == b"READY\nPROTOCOL\nEOF\n"
+    assert b"NOISY_CONDA_PLUGIN" not in completed.stdout
+    assert b"NOISY_CONDA_PLUGIN" in completed.stderr
 
 
 @pytest.mark.skipif(on_win, reason="POSIX deactivation script")

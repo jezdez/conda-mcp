@@ -234,6 +234,25 @@ def test_protocol_streams_before_exit_and_receives_eof(executable_server):
             process.communicate(timeout=5)
 
 
+def test_run_ignores_unrelated_invalid_declaration(
+    executable_server: Path, install_package
+) -> None:
+    install_package(
+        "broken",
+        files={"share/conda-mcp/servers/broken.json": b"{}"},
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", str(PROBE), str(executable_server)],
+        input=b"PROTOCOL\n",
+        capture_output=True,
+        timeout=30,
+        env={**os.environ, "MCP_TEST_TOKEN": ""},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == b"READY\nPROTOCOL\nEOF\n"
+
+
 def test_direct_run_keeps_plugin_output_off_protocol(
     executable_server: Path, noisy_conda_venv: Path
 ) -> None:

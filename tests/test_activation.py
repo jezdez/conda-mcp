@@ -63,6 +63,7 @@ def test_activated_server_keeps_hook_output_off_protocol(tmp_path):
     env["PYTHONPATH"] = os.pathsep.join(
         filter(None, [str(harness.parents[1] / "src"), env.get("PYTHONPATH")])
     )
+    env["MCP_TEST_SERVER_NAME"] = "probe"
     result = subprocess.run(
         [sys.executable, str(harness), str(prefix)],
         check=False,

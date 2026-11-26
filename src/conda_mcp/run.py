@@ -132,10 +132,7 @@ class LaunchPayload:
         """Verify post-activation inputs and return the freshly checked executable."""
         if os.environ.get("CONDA_PREFIX") != self.prefix:
             raise CondaError("Conda activation selected an unexpected prefix.")
-        server = next(
-            (item for item in discover(Path(self.prefix)) if item.name == self.name),
-            None,
-        )
+        server = next(iter(discover(Path(self.prefix), name=self.name)), None)
         if server is None or (
             server.package,
             str(server.manifest),

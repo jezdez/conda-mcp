@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
+import textwrap
 from dataclasses import asdict, replace
 from types import SimpleNamespace
 
@@ -155,3 +157,46 @@ def test_windows_trampoline_waits_for_server_instead_of_exec_overlay(
         str(tmp_path),
         (payload.argv, {"executable": "recorded-server.exe", "check": False}),
     ]
+
+
+def test_trampoline_flushes_diagnostics_before_restoring_protocol():
+    script = textwrap.dedent(
+        r"""
+        import os
+        import sys
+        from types import SimpleNamespace
+
+        protocol_stdout = os.dup(1)
+        os.dup2(2, 1)
+        from conda_mcp import _launch
+
+        def revalidate():
+            print("BUFFERED_PLUGIN")
+            return sys.executable
+
+        def restore_protocol():
+            os.dup2(protocol_stdout, 1)
+            os.close(protocol_stdout)
+
+        payload = SimpleNamespace(
+            argv=(sys.executable, "-I", "-c", "import os; os.write(1, b'PROTOCOL\\n')"),
+            cwd=os.getcwd(),
+            revalidate=revalidate,
+            restore_protocol=restore_protocol,
+        )
+        _launch.LaunchPayload = SimpleNamespace(decode=lambda value: payload)
+        _launch.on_win = True
+        os.environ[_launch._PAYLOAD] = "payload"
+        raise SystemExit(_launch.main())
+        """
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", script],
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert completed.returncode == 0, completed.stderr.decode(errors="replace")
+    assert completed.stdout == b"PROTOCOL\n"
+    assert completed.stderr.splitlines() == [b"BUFFERED_PLUGIN"]

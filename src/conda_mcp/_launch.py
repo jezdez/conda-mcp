@@ -17,6 +17,7 @@ def main() -> int:
     try:
         payload = LaunchPayload.decode(os.environ.pop(_PAYLOAD))
         executable = payload.revalidate()
+        sys.stdout.flush()
         payload.restore_protocol()
         os.chdir(payload.cwd)
         if on_win:

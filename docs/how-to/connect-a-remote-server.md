@@ -4,6 +4,24 @@ Use this guide when an installed package declares an HTTPS MCP endpoint. The cli
 
 You need the endpoint package installed in an existing source environment and a client that supports its transport and authentication. The commands below use `example` in `mcp-servers`. Substitute the name and environment of your real endpoint package.
 
+```{mermaid}
+:alt: An installed declaration supplies the endpoint URL and credential-variable names to conda mcp register, which writes native client configuration. The client reads that configuration and receives credential values from its own environment, then connects directly to the remote MCP server over HTTPS.
+:caption: Registration supplies connection details. The client makes the HTTPS connection.
+
+flowchart TB
+    accTitle: Registering and connecting to a remote MCP server
+    accDescr: An installed declaration supplies the endpoint URL and credential-variable names to conda mcp register, which writes native client configuration. The client reads that configuration and receives credential values from its own environment, then connects directly to the remote MCP server over HTTPS.
+    declaration["Installed declaration<br/>URL and credential-variable names"]
+    register["conda mcp register"]
+    config["Native client configuration"]
+    credentials["Client environment<br/>Credential values"]
+    client["MCP client"]
+    remote["Remote MCP server"]
+    declaration --> register --> config --> client
+    credentials --> client
+    client <-->|HTTPS MCP| remote
+```
+
 ## Review the endpoint
 
 ```sh

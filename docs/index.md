@@ -41,6 +41,7 @@ Ship a Python server, then adapt the recipe for Node, wrappers, or remote endpoi
 - {doc}`how-to/recover-registrations`
 - {doc}`how-to/connect-a-remote-server`
 - {doc}`how-to/provide-credentials`
+- {doc}`how-to/maintain-a-server`
 :::
 
 :::{grid-item-card} Look up details
@@ -53,7 +54,7 @@ Ship a Python server, then adapt the recipe for Node, wrappers, or remote endpoi
 
 ::::
 
-For the reasons behind discovery and permissions, read {doc}`explanation/serving`. {doc}`explanation/lifecycle` covers package ownership, activation, and process cleanup. {doc}`explanation/prior-art` compares conda-mcp with other MCP and conda tools. The {doc}`reference/glossary` defines terms used throughout the guides, and the {ref}`genindex` lists terms and command options alphabetically.
+For the reasons behind discovery and permissions, read {doc}`explanation/serving`. {doc}`explanation/packaged-servers` follows a server from source to installation and explains why to package it with conda. {doc}`explanation/lifecycle` covers package ownership, activation, and process cleanup. {doc}`explanation/prior-art` compares conda-mcp with other MCP and conda tools. The {doc}`reference/glossary` defines terms used throughout the guides, and the {ref}`genindex` lists terms and command options alphabetically.
 
 :::{admonition} Moving from conda-cli-mcp
 :class: seealso
@@ -93,6 +94,7 @@ how-to/package-a-server
 how-to/package-a-node-server
 how-to/package-a-wrapper
 how-to/package-a-remote-server
+how-to/maintain-a-server
 how-to/migrate-from-conda-cli-mcp
 ```
 
@@ -112,6 +114,7 @@ reference/glossary
 :caption: Explanation
 
 explanation/serving
+explanation/packaged-servers
 explanation/lifecycle
 explanation/prior-art
 ```

@@ -4,6 +4,8 @@ Use this guide to ship a Python MCP server and its declaration in one conda pack
 
 For other layouts, use {doc}`package-a-node-server`, {doc}`package-a-wrapper`, or {doc}`package-a-remote-server`.
 
+For the package and registration model, see {doc}`../explanation/packaged-servers`. After the first release, use {doc}`maintain-a-server` to build and test updates.
+
 ## Define the server entry point
 
 The example has one tool and a `main()` function that starts stdio transport:

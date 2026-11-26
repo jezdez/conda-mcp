@@ -33,6 +33,8 @@ Use Sphinx and MyST references for pages, labelled sections, CLI options, and gl
 
 Recordings need descriptive alt text and visible text equivalents. Keep their commands in sync with the VHS tapes. See [the recording instructions](demos/README.md) for setup and regeneration.
 
+Use MyST's `{mermaid}` directive for diagrams. Give each diagram a caption, an `:alt:` description for the text builder, and Mermaid's `accTitle` and `accDescr` for the rendered SVG. Explain the flow in the surrounding prose. Check rendered labels in light and dark themes, since Sphinx alone does not validate Mermaid syntax.
+
 Install the locked docs environment and build the site:
 
 ```sh

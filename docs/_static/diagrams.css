@@ -1,0 +1,11 @@
+pre.mermaid {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+#registration-states pre.mermaid > svg,
+#activation-streams pre.mermaid > svg,
+#generated-tool-flow pre.mermaid > svg,
+#server-maintenance pre.mermaid > svg {
+  min-width: 44rem;
+}

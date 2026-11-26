@@ -647,3 +647,26 @@ def test_executable_resolution_accepts_dependency_owned_symlink_target(
     [server] = discover(prefix)
 
     assert server.resolve_executable() == prefix / "bin/example"
+
+
+@pytest.mark.skipif(on_win, reason="POSIX directory symlink")
+def test_executable_resolution_rejects_unrecorded_target_through_directory_symlink(
+    install_package,
+):
+    prefix = install_package(
+        manifest={
+            "schema_version": 1,
+            "name": "example",
+            "description": "Example",
+            "stdio": {"command": "example"},
+        },
+        files={"bin/example": b"#!/bin/sh\n"},
+    )
+    (prefix / "bin/example").chmod(0o755)
+    (prefix / "bin").rename(prefix / "real-bin")
+    (prefix / "bin").symlink_to(prefix / "real-bin", target_is_directory=True)
+
+    (server,) = discover(prefix)
+
+    with pytest.raises(CondaError, match="missing or ambiguously owned"):
+        server.resolve_executable()

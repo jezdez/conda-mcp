@@ -251,7 +251,7 @@ class Server:
                     target = resolved.relative_to(self.prefix).as_posix()
                     if (
                         len(owners) != 1
-                        or candidate.is_symlink()
+                        or resolved != candidate
                         and sum(target in record.files for record in records) != 1
                     ):
                         continue

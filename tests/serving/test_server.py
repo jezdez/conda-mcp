@@ -421,6 +421,7 @@ async def test_manager_commands_follow_the_same_policy(
         children=(
             Command(name="list"),
             Command(name="register"),
+            Command(name="run"),
             Command(name="serve"),
         ),
     )
@@ -433,6 +434,7 @@ async def test_manager_commands_follow_the_same_policy(
             await client.call_tool("conda_mcp_register", {})
 
     assert "conda_mcp_serve" not in names
+    assert "conda_mcp_run" not in names
     assert allowed.structured_content["exit_code"] == 0
     assert executor.calls == [("mcp", "list")]
 

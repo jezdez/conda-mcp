@@ -67,6 +67,7 @@ async def test_serve_initializes_and_calls_a_read_only_tool() -> None:
     assert "conda_info" in tools
     assert "conda_execute" not in tools
     assert "conda_mcp_serve" not in tools
+    assert "conda_mcp_run" not in tools
     assert result.is_error is False
     assert result.content
     assert "generated_tools" in capabilities.contents[0].text

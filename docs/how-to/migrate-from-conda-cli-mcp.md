@@ -24,7 +24,7 @@ The initialisation response now names the server `conda-mcp`. The capabilities r
 
 Discovery now runs in the invoking conda process. The old standalone server could select a different installation and discover it through a helper process. Follow {doc}`configure-serving` to configure one entry per installation using the current launch model.
 
-The command catalogue now includes the manager's own commands, because they are part of the same conda installation. Clients can call `conda_mcp_list`, `conda_mcp_inspect`, `conda_mcp_render`, `conda_mcp_register`, `conda_mcp_unregister`, `conda_mcp_registry`, and `conda_mcp_run`. Registration and unregistration count as writes. Launching a packaged server counts as execution. `conda mcp serve` is never offered as a generated tool, so a client cannot start another long-lived server through the catalogue.
+The command catalogue now includes the manager's own commands, because they are part of the same conda installation. Clients can call `conda_mcp_list`, `conda_mcp_inspect`, `conda_mcp_render`, `conda_mcp_register`, `conda_mcp_unregister`, and `conda_mcp_registry`. Registration and unregistration count as writes. `conda mcp run` and `conda mcp serve` start stdio servers, so neither is offered as a generated tool.
 
 ## Migration steps
 

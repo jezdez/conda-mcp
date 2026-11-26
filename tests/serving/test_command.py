@@ -776,7 +776,7 @@ def test_command_tool_is_frozen_and_names_are_canonical() -> None:
         tool.commands = ()
 
 
-def test_manager_serve_is_not_a_generated_tool() -> None:
+def test_manager_stdio_launchers_are_not_generated_tools() -> None:
     root = Command(
         name=None,
         terminal=False,
@@ -786,6 +786,7 @@ def test_manager_serve_is_not_a_generated_tool() -> None:
                 terminal=False,
                 children=(
                     Command(name="list"),
+                    Command(name="run"),
                     Command(name="serve"),
                 ),
             ),

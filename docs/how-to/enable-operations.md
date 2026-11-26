@@ -53,7 +53,7 @@ Programs launched with execution permission can modify files even when `--allow-
 | Generated known read-only command | None. |
 | Generated mutation | `--allow-write`. |
 | Recognised dry-run form | No write flag needed. Any independent execution requirement still applies. |
-| Generated `conda run` or `conda mcp run` | `--allow-exec`. |
+| Generated `conda run` | `--allow-exec`. |
 | Raw known read-only argv | `--allow-exec`. |
 | Raw mutation or unknown argv | `--allow-exec` and `--allow-write`. |
 | Opaque plugin passthrough classified as a mutation | `--allow-exec` and `--allow-write`. |

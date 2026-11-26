@@ -450,10 +450,10 @@ def command_tools(program: Program) -> tuple[CommandTool, ...]:
         blocked = affected or any(node.raw_only for node in current)
         unknown = any(node.name is None for node in current[1:])
 
-        # ponytail: `mcp serve` would start a nested long-lived server.
+        # Stdio launchers need a client to supply protocol input.
         if (
             path
-            and path != ("mcp", "serve")
+            and path not in {("mcp", "run"), ("mcp", "serve")}
             and command.terminal
             and not blocked
             and not unknown

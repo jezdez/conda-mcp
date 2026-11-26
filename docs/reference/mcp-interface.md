@@ -23,7 +23,7 @@ Generated string positionals reject values beginning with `-`, except for an opa
 
 Generated tools include canonical-path and alias metadata. Their annotations describe read-only, destructive, idempotent, and open-world behaviour. Mutation tools remain listed when writes are disabled. Server policy checks each invocation before starting conda, independently of client annotations.
 
-The manager's `list`, `inspect`, `render`, `register`, `unregister`, `registry`, and `run` commands can appear as generated tools. `conda mcp serve` itself is excluded from generated tools.
+The manager's `list`, `inspect`, `render`, `register`, `unregister`, and `registry` commands can appear as generated tools. The `run` and `serve` commands start stdio servers, so they are excluded from generated tools.
 
 ## Raw argv tool
 

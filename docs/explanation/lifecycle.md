@@ -8,7 +8,61 @@ Conda-mcp reads package records from one selected environment. It does not insta
 
 Conda updates and removals are native lifecycle operations. An update can change a declaration or executable after registration. A removed package can leave a client registration pointing at an unavailable server. Unregister that registration after removal. Registration receipts describe configuration changes, not package ownership or activation trust.
 
+## Registration and source checks
+
+`registry` answers two separate questions. Its `state` field compares the client entry with the saved entry fingerprint. Its `source_state` field compares the receipt's package and declaration provenance with what is installed in the recorded prefix. An unchanged client entry can remain `managed` after its source becomes `missing`.
+
+```{mermaid}
+:name: registration-states
+:alt: The saved receipt supports two independent comparisons. Comparing the client entry with its saved fingerprint can report managed. Comparing the recorded package and declaration with the installed records can independently report missing after package removal.
+:caption: After package removal, an unchanged client entry can be managed while its recorded source is missing.
+
+flowchart TB
+    accTitle: Independent registration and source states
+    accDescr: The saved receipt supports two independent comparisons. Comparing the client entry with its saved fingerprint can report managed. Comparing the recorded package and declaration with the installed records can independently report missing after package removal.
+    entry["Current client entry"] --> entryCheck["Compare entry with saved fingerprint"]
+    receipt["Registration receipt"] --> entryCheck
+    receipt --> sourceCheck["Compare source with recorded package and declaration"]
+    installed["Package records and recorded declaration"] --> sourceCheck
+    entryCheck --> entryState["Example: state = managed"]
+    sourceCheck --> sourceState["Example: source_state = missing"]
+```
+
+These checks do not resolve or run the executable, connect to a server, or test client health. A `current` source describes matching package and declaration metadata. Launch-time checks can still reject its executable or required environment variables. See {doc}`../reference/registrations` for every state and {doc}`../how-to/recover-registrations` for recovery steps.
+
+## Activation and protocol streams
+
 The foreground runner uses conda's native activation wrapper and a fixed host-Python trampoline. Package activation and deactivation hooks execute with the user's privileges. The wrapper receives null stdin and sends both output streams to diagnostic stderr. Saved protocol descriptors or Windows handles are restored only after activation and a fresh manifest/executable check. Literal argv travels in bounded reserved environment data that is removed before server execution.
+
+```{mermaid}
+:name: activation-streams
+:alt: The conda-mcp launcher saves protocol streams before activation. Activation receives null stdin and startup output goes to diagnostic stderr. Once the server passes its post-activation checks, the launcher flushes diagnostics and restores protocol streams before starting the executable. The client exchanges MCP messages directly with the server. Failed checks produce diagnostics, and the launcher cleans up after exit.
+:caption: A packaged stdio server receives protocol streams only after activation and fresh launch checks.
+
+sequenceDiagram
+    accTitle: Activation before protocol access
+    accDescr: The conda-mcp launcher saves protocol streams before activation. Activation receives null stdin and startup output goes to diagnostic stderr. Once the server passes its post-activation checks, the launcher flushes diagnostics and restores protocol streams before starting the executable. The client exchanges MCP messages directly with the server. Failed checks produce diagnostics, and the launcher cleans up after exit.
+    participant Client as MCP client
+    participant Launcher as conda-mcp launcher
+    participant Server as Packaged server
+    Client->>Launcher: Start run SERVER
+    Launcher->>Launcher: Save protocol streams
+    Note over Launcher: Activation uses null stdin<br/>Startup output goes to diagnostic stderr
+    Launcher->>Launcher: Activate and recheck server
+    alt Checks pass
+        Launcher->>Launcher: Flush diagnostics<br/>Restore protocol streams
+        Launcher->>Server: Start the recorded executable
+        Client->>Server: MCP requests
+        Server-->>Client: MCP responses
+        Server-->>Launcher: Exit status
+    else Checks fail
+        Launcher-->>Client: Failure on stderr
+    end
+    Launcher->>Launcher: Clean up processes and handles
+    Launcher-->>Client: Exit status
+```
+
+## Process cleanup
 
 On POSIX, the wrapper starts in a separate process group. Interrupts are forwarded once. Remaining group members are killed after a bounded grace period and the wrapper is reaped. A process deliberately escaping its group, or an uncatchable parent termination, is outside this cleanup guarantee. Neither platform restarts a server or detaches it as a service.
 
